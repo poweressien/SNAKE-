@@ -18,7 +18,7 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%;
-    overflow: hidden; background: #0c0e14;
+    overflow: hidden; overscroll-behavior: none; background: #0c0e14;
     font-family: 'Space Grotesk', sans-serif;
   }
   #renderCanvas { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
@@ -50,6 +50,56 @@
     display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px);
   }
   #muteBtn:hover { filter: brightness(1.15); }
+
+  /* ---- Touch / tilt controls: hidden by default, shown only on devices
+     whose primary pointer is coarse (phones/tablets), via media query below ---- */
+  #tiltControls, #touchSteer, #touchPedals { display: none; }
+
+  .pillBtn {
+    pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
+    background: var(--panel); border: 1px solid var(--panel-line); color: var(--text);
+    font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 500;
+    padding: 8px 12px; border-radius: 20px; backdrop-filter: blur(6px); white-space: nowrap;
+  }
+  .pillBtn:active { background: rgba(255,182,39,0.3); }
+
+  .touchGroup { position: fixed; display: flex; gap: 16px; z-index: 5; }
+  #touchSteer { left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+  #touchPedals { right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); flex-direction: row-reverse; }
+
+  .touchBtn {
+    pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
+    touch-action: none;
+    width: 62px; height: 62px; border-radius: 50%;
+    background: rgba(12,14,20,0.6); border: 2px solid var(--panel-line); color: var(--text);
+    font-size: 24px; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .touchBtn:active { background: rgba(255,182,39,0.4); border-color: var(--amber); }
+  .touchBtn.accel { background: rgba(255,182,39,0.22); }
+  .touchBtn.pedal { width: 68px; height: 68px; font-size: 26px; }
+
+  #rotateHint {
+    display: none; position: fixed; inset: 0; z-index: 20;
+    background: #05060a; color: var(--text); text-align: center;
+    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+  }
+  #rotateHint .rotateIcon { font-size: 44px; animation: rotateHintSpin 1.8s ease-in-out infinite; }
+  #rotateHint p { font-family: 'Space Grotesk', sans-serif; font-size: 15px; color: var(--text-dim); max-width: 260px; margin: 0; }
+  @keyframes rotateHintSpin {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(90deg); }
+  }
+
+  @media (pointer: coarse) {
+    #tiltControls, #touchSteer, #touchPedals { display: flex; }
+    #tiltControls { position: fixed; top: 68px; right: 18px; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 5; }
+    #hint { display: none; }
+    #bottomRight { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+  }
+  @media (pointer: coarse) and (orientation: portrait) {
+    #rotateHint { display: flex; }
+  }
 
   .speed-value { font-family: 'Space Mono', monospace; font-size: 52px; font-weight: 700; color: var(--amber); line-height: 1; }
   .speed-unit { font-size: 12px; letter-spacing: 0.1em; color: var(--text-dim); }
@@ -129,9 +179,29 @@
     <div id="hint">WASD / Arrow keys to drive &middot; R to restart &middot; M to mute music</div>
 
     <button id="muteBtn" title="Toggle music (M)">&#128266;</button>
+
+    <div id="tiltControls">
+      <button id="tiltBtn" class="pillBtn">Tilt: Off</button>
+      <button id="invertBtn" class="pillBtn" style="display:none;">&#8646; Invert</button>
+    </div>
+
+    <div id="touchSteer" class="touchGroup">
+      <button id="btnLeft" class="touchBtn">&#9664;</button>
+      <button id="btnRight" class="touchBtn">&#9654;</button>
+    </div>
+
+    <div id="touchPedals" class="touchGroup">
+      <button id="btnBrake" class="touchBtn pedal">&#9660;</button>
+      <button id="btnAccel" class="touchBtn pedal accel">&#9650;</button>
+    </div>
   </div>
 
   <div id="offTrack">Barrier</div>
+
+  <div id="rotateHint">
+    <div class="rotateIcon">&#128241;</div>
+    <p>Rotate your device to landscape for the best view</p>
+  </div>
 
   <div id="overlay">
     <div id="startScreen" class="menuPanel">
@@ -651,7 +721,8 @@
     camera.lockedTarget = car;
     scene.activeCamera = camera;
 
-    // ---------- INPUT ----------
+    // ---------- INPUT (keyboard + on-screen touch buttons + device tilt —
+    // all feed the same `keys` map / tiltSteer value that update() reads) ----------
     const keys = {};
     const GAME_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'r'];
     window.addEventListener('keydown', (e) => {
@@ -664,6 +735,67 @@
     });
     window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
     function isDown(...names) { return names.some(n => keys[n]); }
+
+    // Touch buttons: each press sets the SAME key flags the physics already
+    // reads, so nothing downstream needs to know whether input came from a
+    // keyboard or a thumb.
+    function bindTouchButton(el, keyNames) {
+      if (!el) return;
+      const press = (e) => {
+        e.preventDefault();
+        keyNames.forEach((k) => { keys[k] = true; });
+        if (!started) startRace();
+      };
+      const release = (e) => {
+        if (e) e.preventDefault();
+        keyNames.forEach((k) => { keys[k] = false; });
+      };
+      el.addEventListener('pointerdown', press);
+      el.addEventListener('pointerup', release);
+      el.addEventListener('pointercancel', release);
+      el.addEventListener('pointerleave', release);
+    }
+
+    // Tilt steering: continuous value in [-1, 1], added to the digital
+    // left/right contribution before being clamped — so tilt and the on-
+    // screen buttons both work at once, either can correct the other.
+    let tiltEnabled = false, tiltInverted = false, tiltBaseline = null, tiltSteer = 0;
+    const TILT_SENSITIVITY_DEG = 28;
+    const TILT_DEADZONE = 0.06;
+
+    function handleOrientation(e) {
+      if (!tiltEnabled) return;
+      const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+      let raw;
+      if (angle === 90 || angle === -270) raw = e.beta;
+      else if (angle === -90 || angle === 270) raw = -e.beta;
+      else raw = e.gamma;
+      if (raw === null || raw === undefined || Number.isNaN(raw)) return;
+      if (tiltBaseline === null) tiltBaseline = raw;
+      let v = (raw - tiltBaseline) / TILT_SENSITIVITY_DEG;
+      if (tiltInverted) v = -v;
+      if (Math.abs(v) < TILT_DEADZONE) v = 0;
+      tiltSteer = Math.max(-1, Math.min(1, v));
+    }
+
+    function setTiltEnabled(on) {
+      tiltEnabled = on;
+      tiltBaseline = null;
+      tiltSteer = 0;
+      if (el.tiltBtn) el.tiltBtn.textContent = on ? 'Tilt: On' : 'Tilt: Off';
+      if (el.invertBtn) el.invertBtn.style.display = on ? 'flex' : 'none';
+    }
+
+    function requestTilt() {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then((state) => {
+          if (state === 'granted') { window.addEventListener('deviceorientation', handleOrientation); setTiltEnabled(true); }
+        }).catch(() => {});
+      } else if (typeof window.DeviceOrientationEvent !== 'undefined') {
+        window.addEventListener('deviceorientation', handleOrientation);
+        setTiltEnabled(true);
+      }
+    }
 
     // ---------- AUDIO (procedural engine hum, no audio files) ----------
     let audioCtx = null, osc = null, gainNode = null, filterNode = null;
@@ -862,10 +994,28 @@
       finalBest: document.getElementById('finalBest'),
       speedValue: document.getElementById('speedValue'),
       offTrack: document.getElementById('offTrack'),
-      muteBtn: document.getElementById('muteBtn')
+      muteBtn: document.getElementById('muteBtn'),
+      tiltBtn: document.getElementById('tiltBtn'),
+      invertBtn: document.getElementById('invertBtn'),
+      btnLeft: document.getElementById('btnLeft'),
+      btnRight: document.getElementById('btnRight'),
+      btnAccel: document.getElementById('btnAccel'),
+      btnBrake: document.getElementById('btnBrake')
     };
     document.getElementById('lapTotal').textContent = TOTAL_LAPS;
     el.muteBtn.addEventListener('click', toggleMute);
+
+    bindTouchButton(el.btnLeft, ['a', 'arrowleft']);
+    bindTouchButton(el.btnRight, ['d', 'arrowright']);
+    bindTouchButton(el.btnAccel, ['w', 'arrowup']);
+    bindTouchButton(el.btnBrake, ['s', 'arrowdown']);
+
+    el.tiltBtn.addEventListener('click', () => {
+      if (!started) startRace();
+      if (tiltEnabled) { setTiltEnabled(false); }
+      else { requestTilt(); }
+    });
+    el.invertBtn.addEventListener('click', () => { tiltInverted = !tiltInverted; });
 
     function formatTime(sec) {
       const m = Math.floor(sec / 60);
@@ -916,9 +1066,13 @@
         (1 + Math.max(0, absSpeed - TURN_LOW_SPEED_RAMP) / TURN_HIGH_SPEED_SOFTEN);
       const turnStrength = rampUp * highSpeedEase;
       const speedFactor = Math.sign(state.speed || 1) * turnStrength;
-      let steerInput = 0;
-      if (left) { state.heading -= TURN_RATE * speedFactor * dt; steerInput -= 1; }
-      if (right) { state.heading += TURN_RATE * speedFactor * dt; steerInput += 1; }
+
+      let steerInput = tiltSteer;
+      if (left) steerInput -= 1;
+      if (right) steerInput += 1;
+      steerInput = Math.max(-1, Math.min(1, steerInput));
+
+      state.heading += TURN_RATE * speedFactor * steerInput * dt;
       if (steerInput !== 0) {
         state.speed -= Math.sign(state.speed || 1) * CORNER_SCRUB * turnStrength * Math.abs(steerInput) * dt;
       }
@@ -1009,6 +1163,7 @@
       scene.render();
     });
     window.addEventListener('resize', () => engine.resize());
+    window.addEventListener('orientationchange', () => setTimeout(() => engine.resize(), 250));
 
   })();
   </script>
