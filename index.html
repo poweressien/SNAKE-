@@ -199,6 +199,7 @@
     <div id="tiltControls">
       <button id="tiltBtn" class="pillBtn">Tilt: Off</button>
       <button id="invertBtn" class="pillBtn" style="display:none;">&#8646; Invert</button>
+      <button id="swapAxisBtn" class="pillBtn" style="display:none;">&#8645; Swap Axis</button>
     </div>
 
     <div id="touchSteer" class="touchGroup">
@@ -778,20 +779,37 @@
     // Tilt steering: continuous value in [-1, 1], added to the digital
     // left/right contribution before being clamped — so tilt and the on-
     // screen buttons both work at once, either can correct the other.
-    let tiltEnabled = false, tiltInverted = false, tiltBaseline = null, tiltSteer = 0;
-    const TILT_SENSITIVITY_DEG = 28;
-    const TILT_DEADZONE = 0.06;
+    let tiltEnabled = false, tiltInverted = false, tiltAxisSwapped = false;
+    let tiltBaseline = null, tiltSteer = 0, smoothedTilt = null;
+    let calibrationSamples = [];
+    let lastOrientationEventTime = 0, tiltEnabledAt = 0, tiltNoSignalWarned = false;
+    const TILT_SENSITIVITY_DEG = 18;   // degrees of tilt for full lock — lower = more sensitive
+    const TILT_DEADZONE = 0.05;
+    const TILT_SMOOTHING = 0.25;       // exponential smoothing factor against raw sensor jitter
+    const TILT_CALIBRATION_SAMPLES = 8;
 
     function handleOrientation(e) {
       if (!tiltEnabled) return;
+      lastOrientationEventTime = Date.now();
       const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-      let raw;
-      if (angle === 90 || angle === -270) raw = e.beta;
-      else if (angle === -90 || angle === 270) raw = -e.beta;
-      else raw = e.gamma;
+      const landscapeLike = (angle === 90 || angle === -90 || angle === 270 || angle === -270);
+      let useBeta = landscapeLike;
+      if (tiltAxisSwapped) useBeta = !useBeta;
+      let raw = useBeta ? e.beta : e.gamma;
+      if ((angle === -90 || angle === 270) && useBeta) raw = -raw;
       if (raw === null || raw === undefined || Number.isNaN(raw)) return;
-      if (tiltBaseline === null) tiltBaseline = raw;
-      let v = (raw - tiltBaseline) / TILT_SENSITIVITY_DEG;
+
+      smoothedTilt = (smoothedTilt === null) ? raw : smoothedTilt + (raw - smoothedTilt) * TILT_SMOOTHING;
+
+      if (tiltBaseline === null) {
+        calibrationSamples.push(smoothedTilt);
+        if (calibrationSamples.length >= TILT_CALIBRATION_SAMPLES) {
+          tiltBaseline = calibrationSamples.reduce((a, b) => a + b, 0) / calibrationSamples.length;
+        }
+        return;
+      }
+
+      let v = (smoothedTilt - tiltBaseline) / TILT_SENSITIVITY_DEG;
       if (tiltInverted) v = -v;
       if (Math.abs(v) < TILT_DEADZONE) v = 0;
       tiltSteer = Math.max(-1, Math.min(1, v));
@@ -801,8 +819,14 @@
       tiltEnabled = on;
       tiltBaseline = null;
       tiltSteer = 0;
+      smoothedTilt = null;
+      calibrationSamples = [];
+      tiltNoSignalWarned = false;
+      tiltEnabledAt = on ? Date.now() : 0;
+      lastOrientationEventTime = 0;
       if (el.tiltBtn) el.tiltBtn.textContent = on ? 'Tilt: On' : 'Tilt: Off';
       if (el.invertBtn) el.invertBtn.style.display = on ? 'flex' : 'none';
+      if (el.swapAxisBtn) el.swapAxisBtn.style.display = on ? 'flex' : 'none';
     }
 
     function requestTilt() {
@@ -813,6 +837,14 @@
       } else if (typeof window.DeviceOrientationEvent !== 'undefined') {
         window.addEventListener('deviceorientation', handleOrientation);
         setTiltEnabled(true);
+      }
+    }
+
+    function checkTiltSignal() {
+      if (!tiltEnabled || tiltNoSignalWarned) return;
+      if (lastOrientationEventTime === 0 && Date.now() - tiltEnabledAt > 2000) {
+        tiltNoSignalWarned = true;
+        if (el.tiltBtn) el.tiltBtn.textContent = 'Tilt: No signal';
       }
     }
 
@@ -1109,6 +1141,7 @@
       muteBtn: document.getElementById('muteBtn'),
       tiltBtn: document.getElementById('tiltBtn'),
       invertBtn: document.getElementById('invertBtn'),
+      swapAxisBtn: document.getElementById('swapAxisBtn'),
       btnLeft: document.getElementById('btnLeft'),
       btnRight: document.getElementById('btnRight'),
       btnAccel: document.getElementById('btnAccel'),
@@ -1132,6 +1165,7 @@
       else { requestTilt(); }
     });
     el.invertBtn.addEventListener('click', () => { tiltInverted = !tiltInverted; });
+    el.swapAxisBtn.addEventListener('click', () => { tiltAxisSwapped = !tiltAxisSwapped; tiltBaseline = null; smoothedTilt = null; calibrationSamples = []; tiltSteer = 0; });
 
     function formatTime(sec) {
       const m = Math.floor(sec / 60);
@@ -1164,6 +1198,7 @@
       updateTraffic(dt);
       updateMusicScheduler();
       updateSparks(dt);
+      checkTiltSignal();
       if (!started || state.finished) return;
       state.raceClock += dt;
 
