@@ -86,6 +86,13 @@
   }
   #rotateHint .rotateIcon { font-size: 44px; animation: rotateHintSpin 1.8s ease-in-out infinite; }
   #rotateHint p { font-family: 'Space Grotesk', sans-serif; font-size: 15px; color: var(--text-dim); max-width: 260px; margin: 0; }
+  #rotateContinueBtn {
+    pointer-events: auto; cursor: pointer; margin-top: 14px;
+    background: transparent; color: var(--text-dim); border: 1px solid var(--panel-line);
+    font-family: 'Space Grotesk', sans-serif; font-size: 13px; letter-spacing: 0.03em;
+    padding: 10px 20px; border-radius: 20px;
+  }
+  #rotateContinueBtn:active { background: rgba(255,182,39,0.2); color: var(--text); }
   @keyframes rotateHintSpin {
     0%, 100% { transform: rotate(0deg); }
     50% { transform: rotate(90deg); }
@@ -100,6 +107,10 @@
   @media (pointer: coarse) and (orientation: portrait) {
     #rotateHint { display: flex; }
   }
+  @media (max-width: 480px) {
+    .menuPanel { padding: 34px 26px; max-width: 92vw; }
+    #overlay .controls { flex-wrap: wrap; row-gap: 14px; }
+  }
 
   .speed-value { font-family: 'Space Mono', monospace; font-size: 52px; font-weight: 700; color: var(--amber); line-height: 1; }
   .speed-unit { font-size: 12px; letter-spacing: 0.1em; color: var(--text-dim); }
@@ -110,6 +121,11 @@
     color: var(--amber); opacity: 0; transition: opacity 0.2s; text-transform: uppercase;
   }
   #offTrack.show { opacity: 1; }
+
+  #impactFlash {
+    position: fixed; inset: 0; background: rgba(255,55,35,0.32);
+    opacity: 0; pointer-events: none; z-index: 8;
+  }
 
   #overlay {
     position: fixed; inset: 0; background: rgba(6,7,11,0.4);
@@ -197,10 +213,12 @@
   </div>
 
   <div id="offTrack">Barrier</div>
+  <div id="impactFlash"></div>
 
   <div id="rotateHint">
     <div class="rotateIcon">&#128241;</div>
     <p>Rotate your device to landscape for the best view</p>
+    <button id="rotateContinueBtn">Continue anyway</button>
   </div>
 
   <div id="overlay">
@@ -243,7 +261,7 @@
     const ROAD_HALF_WIDTH = 6;
     const PAVEMENT_WIDTH = 1.6;
     const WALL_LIMIT = ROAD_HALF_WIDTH + PAVEMENT_WIDTH; // hard boundary — cars cannot cross this
-    const WALL_BOUNCE_MARGIN = 0.12; // small settle-back so cars don't feel glued to the edge
+    const WALL_BOUNCE_MARGIN = 0.4; // settle-back after a hit — also gives slack against reference-frame drift on curves
     const TREE_COUNT = 140;
 
     const MAX_SPEED = 46;
@@ -652,6 +670,7 @@
           state.x += (dx / dist) * overlap;
           state.z += (dz / dist) * overlap;
           state.speed *= 0.82;
+          if (Math.abs(state.speed) > 2.5) triggerImpactEffect(state.x, 0.5, state.z);
         }
       });
     }
@@ -970,6 +989,99 @@
       }
     }
 
+    // ---------- IMPACT EFFECTS (sparks + screen flash + thud, shared by wall
+    // hits and traffic bumps, gated by a cooldown so grinding along something
+    // doesn't spam the effect every frame) ----------
+    const sparkMat = new BABYLON.StandardMaterial('sparkMat', scene);
+    sparkMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
+    sparkMat.emissiveColor = new BABYLON.Color3(1, 0.75, 0.2);
+    sparkMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    let activeSparks = [];
+
+    function spawnImpactSparks(x, y, z) {
+      const count = 10;
+      for (let i = 0; i < count; i++) {
+        const spark = BABYLON.MeshBuilder.CreateBox('spark', { size: 0.1 + Math.random() * 0.08 }, scene);
+        spark.material = sparkMat;
+        spark.position.set(x, y, z);
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 3.5 + Math.random() * 3;
+        activeSparks.push({
+          mesh: spark,
+          vx: Math.cos(angle) * speed,
+          vy: 2.5 + Math.random() * 2.5,
+          vz: Math.sin(angle) * speed,
+          life: 0,
+          maxLife: 0.3 + Math.random() * 0.2
+        });
+      }
+    }
+
+    function updateSparks(dt) {
+      for (let i = activeSparks.length - 1; i >= 0; i--) {
+        const s = activeSparks[i];
+        s.life += dt;
+        if (s.life >= s.maxLife) {
+          s.mesh.dispose();
+          activeSparks.splice(i, 1);
+          continue;
+        }
+        s.vy -= 9 * dt;
+        s.mesh.position.x += s.vx * dt;
+        s.mesh.position.y += s.vy * dt;
+        s.mesh.position.z += s.vz * dt;
+        const scale = Math.max(0.05, 1 - s.life / s.maxLife);
+        s.mesh.scaling.set(scale, scale, scale);
+      }
+    }
+
+    function flashImpactScreen() {
+      if (!el.impactFlash) return;
+      el.impactFlash.style.transition = 'none';
+      el.impactFlash.style.opacity = '1';
+      requestAnimationFrame(() => {
+        el.impactFlash.style.transition = 'opacity 0.35s ease-out';
+        el.impactFlash.style.opacity = '0';
+      });
+    }
+
+    function playImpactThud() {
+      if (!audioCtx) return;
+      const t = audioCtx.currentTime;
+      const thump = audioCtx.createOscillator();
+      const thumpGain = audioCtx.createGain();
+      thump.type = 'sine';
+      thump.frequency.setValueAtTime(120, t);
+      thump.frequency.exponentialRampToValueAtTime(35, t + 0.18);
+      thumpGain.gain.setValueAtTime(0.55, t);
+      thumpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      thump.connect(thumpGain).connect(audioCtx.destination);
+      thump.start(t); thump.stop(t + 0.32);
+
+      if (noiseBuffer) {
+        const crash = audioCtx.createBufferSource();
+        crash.buffer = noiseBuffer;
+        const crashFilter = audioCtx.createBiquadFilter();
+        crashFilter.type = 'bandpass';
+        crashFilter.frequency.value = 900;
+        crashFilter.Q.value = 0.7;
+        const crashGain = audioCtx.createGain();
+        crashGain.gain.setValueAtTime(0.4, t);
+        crashGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        crash.connect(crashFilter).connect(crashGain).connect(audioCtx.destination);
+        crash.start(t); crash.stop(t + 0.24);
+      }
+    }
+
+    let lastImpactEffectTime = -999;
+    function triggerImpactEffect(x, y, z) {
+      if (state.raceClock - lastImpactEffectTime < 0.5) return;
+      lastImpactEffectTime = state.raceClock;
+      spawnImpactSparks(x, y, z);
+      flashImpactScreen();
+      playImpactThud();
+    }
+
     // ---------- NEAREST TRACK POINT (off-track check + lap detection) ----------
     function nearestTrackIndex(x, z) {
       let best = Infinity, bestI = 0;
@@ -1000,10 +1112,14 @@
       btnLeft: document.getElementById('btnLeft'),
       btnRight: document.getElementById('btnRight'),
       btnAccel: document.getElementById('btnAccel'),
-      btnBrake: document.getElementById('btnBrake')
+      btnBrake: document.getElementById('btnBrake'),
+      rotateHint: document.getElementById('rotateHint'),
+      rotateContinueBtn: document.getElementById('rotateContinueBtn'),
+      impactFlash: document.getElementById('impactFlash')
     };
     document.getElementById('lapTotal').textContent = TOTAL_LAPS;
     el.muteBtn.addEventListener('click', toggleMute);
+    el.rotateContinueBtn.addEventListener('click', () => { el.rotateHint.style.display = 'none'; });
 
     bindTouchButton(el.btnLeft, ['a', 'arrowleft']);
     bindTouchButton(el.btnRight, ['d', 'arrowright']);
@@ -1047,6 +1163,7 @@
     function update(dt) {
       updateTraffic(dt);
       updateMusicScheduler();
+      updateSparks(dt);
       if (!started || state.finished) return;
       state.raceClock += dt;
 
@@ -1101,6 +1218,7 @@
         state.x += perpHere.x * correction;
         state.z += perpHere.z * correction;
         if (!state.wasAtWall) {
+          const impactSpeed = Math.abs(state.speed);
           state.speed *= WALL_IMPACT_LOSS;
           const wallTangent = tangentAt(nearest.index);
           const trackHeading = Math.atan2(wallTangent.x, wallTangent.z);
@@ -1108,6 +1226,7 @@
           while (headingDiff > Math.PI) headingDiff -= Math.PI * 2;
           while (headingDiff < -Math.PI) headingDiff += Math.PI * 2;
           state.heading += headingDiff * 0.2;
+          if (impactSpeed > 2.5) triggerImpactEffect(state.x, 0.5, state.z);
         }
         state.wasAtWall = true;
         hitWall = true;
