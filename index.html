@@ -51,19 +51,11 @@
   }
   #muteBtn:hover { filter: brightness(1.15); }
 
-  #tiltControls, #touchSteer, #touchPedals { display: none; }
-
-  .pillBtn {
-    pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
-    background: var(--panel); border: 1px solid var(--panel-line); color: var(--text);
-    font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 500;
-    padding: 8px 12px; border-radius: 20px; backdrop-filter: blur(6px); white-space: nowrap;
-  }
-  .pillBtn:active { background: rgba(255,182,39,0.3); }
+  /* Touch controls – always shown on touch devices, no tilt */
+  #touchSteer, #touchPedals { display: none; }
 
   .touchGroup { position: fixed; display: flex; gap: 16px; z-index: 5; }
   #touchSteer { left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
-  /* Pedals: brake left, accel right (default row direction) */
   #touchPedals { right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); flex-direction: row; }
 
   .touchBtn {
@@ -98,10 +90,7 @@
   }
 
   @media (pointer: coarse) {
-    #tiltControls, #touchPedals { display: flex; }
-    /* Steer buttons hidden by default, only shown if tilt fails */
-    #touchSteer { display: none; }
-    #tiltControls { position: fixed; top: 68px; right: 18px; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 5; }
+    #touchSteer, #touchPedals { display: flex; }
     #hint { display: none; }
     #bottomRight { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
   }
@@ -197,12 +186,6 @@
 
     <button id="muteBtn" title="Toggle music (M)">&#128266;</button>
 
-    <div id="tiltControls">
-      <button id="tiltBtn" class="pillBtn">Tilt: On</button>
-      <button id="invertBtn" class="pillBtn" style="display:flex;">&#8646; Invert</button>
-      <button id="swapAxisBtn" class="pillBtn" style="display:flex;">&#8645; Swap Axis</button>
-    </div>
-
     <div id="touchSteer" class="touchGroup">
       <button id="btnLeft" class="touchBtn">&#9664;</button>
       <button id="btnRight" class="touchBtn">&#9654;</button>
@@ -265,7 +248,7 @@
     const BRAKE_RATE = 42;
     const DRAG = 0.55;
     const GRASS_DRAG = 6.0;
-    const TURN_RATE = 1.85;
+    const TURN_RATE = 1.5;           // balanced for touch – responsive but not twitchy
     const TURN_LOW_SPEED_RAMP = 8;
     const TURN_HIGH_SPEED_SOFTEN = 16;
     const TURN_MIN_STRENGTH = 0.3;
@@ -725,7 +708,7 @@
     camera.lockedTarget = car;
     scene.activeCamera = camera;
 
-    // ---------- INPUT ----------
+    // ---------- INPUT (keyboard + touch buttons only, no tilt) ----------
     const keys = {};
     const GAME_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'r'];
     window.addEventListener('keydown', (e) => {
@@ -754,78 +737,6 @@
       el.addEventListener('pointerup', release);
       el.addEventListener('pointercancel', release);
       el.addEventListener('pointerleave', release);
-    }
-
-    // ---------- TILT STEERING ----------
-    let tiltEnabled = false, tiltInverted = false, tiltAxisSwapped = false;
-    let tiltBaseline = null, tiltSteer = 0, smoothedTilt = null;
-    let calibrationSamples = [];
-    let lastOrientationEventTime = 0, tiltEnabledAt = 0, tiltNoSignalWarned = false;
-    const TILT_SENSITIVITY_DEG = 28;
-    const TILT_DEADZONE = 0.05;
-    const TILT_SMOOTHING = 0.28;
-    const TILT_CALIBRATION_SAMPLES = 8;
-
-    function handleOrientation(e) {
-      if (!tiltEnabled) return;
-      lastOrientationEventTime = Date.now();
-      const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-      const landscapeLike = (angle === 90 || angle === -90 || angle === 270 || angle === -270);
-      let useBeta = landscapeLike;
-      if (tiltAxisSwapped) useBeta = !useBeta;
-      let raw = useBeta ? e.beta : e.gamma;
-      if ((angle === -90 || angle === 270) && useBeta) raw = -raw;
-      if (raw === null || raw === undefined || Number.isNaN(raw)) return;
-
-      smoothedTilt = (smoothedTilt === null) ? raw : smoothedTilt + (raw - smoothedTilt) * TILT_SMOOTHING;
-
-      if (tiltBaseline === null) {
-        calibrationSamples.push(smoothedTilt);
-        if (calibrationSamples.length >= TILT_CALIBRATION_SAMPLES) {
-          tiltBaseline = calibrationSamples.reduce((a, b) => a + b, 0) / calibrationSamples.length;
-        }
-        return;
-      }
-
-      let v = (smoothedTilt - tiltBaseline) / TILT_SENSITIVITY_DEG;
-      if (tiltInverted) v = -v;
-      if (Math.abs(v) < TILT_DEADZONE) v = 0;
-      tiltSteer = Math.max(-1, Math.min(1, v));
-    }
-
-    function setTiltEnabled(on) {
-      tiltEnabled = on;
-      tiltBaseline = null;
-      tiltSteer = 0;
-      smoothedTilt = null;
-      calibrationSamples = [];
-      tiltNoSignalWarned = false;
-      tiltEnabledAt = on ? Date.now() : 0;
-      lastOrientationEventTime = 0;
-      if (el.tiltBtn) el.tiltBtn.textContent = on ? 'Tilt: On' : 'Tilt: Off';
-      if (el.invertBtn) el.invertBtn.style.display = on ? 'flex' : 'none';
-      if (el.swapAxisBtn) el.swapAxisBtn.style.display = on ? 'flex' : 'none';
-    }
-
-    function requestTilt() {
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().then((state) => {
-          if (state === 'granted') { window.addEventListener('deviceorientation', handleOrientation); setTiltEnabled(true); }
-        }).catch(() => {});
-      } else if (typeof window.DeviceOrientationEvent !== 'undefined') {
-        window.addEventListener('deviceorientation', handleOrientation);
-        setTiltEnabled(true);
-      }
-    }
-
-    function checkTiltSignal() {
-      if (!tiltEnabled || tiltNoSignalWarned) return;
-      if (lastOrientationEventTime === 0 && Date.now() - tiltEnabledAt > 2000) {
-        tiltNoSignalWarned = true;
-        if (el.tiltBtn) el.tiltBtn.textContent = 'Tilt: No signal';
-        // Fallback: show steer buttons if tilt fails
-        if (el.touchSteer) el.touchSteer.style.display = 'flex';
-      }
     }
 
     // ---------- LANDSCAPE LOCK ----------
@@ -1122,15 +1033,10 @@
       speedValue: document.getElementById('speedValue'),
       offTrack: document.getElementById('offTrack'),
       muteBtn: document.getElementById('muteBtn'),
-      tiltBtn: document.getElementById('tiltBtn'),
-      invertBtn: document.getElementById('invertBtn'),
-      swapAxisBtn: document.getElementById('swapAxisBtn'),
       btnLeft: document.getElementById('btnLeft'),
       btnRight: document.getElementById('btnRight'),
       btnAccel: document.getElementById('btnAccel'),
       btnBrake: document.getElementById('btnBrake'),
-      touchSteer: document.getElementById('touchSteer'),
-      touchPedals: document.getElementById('touchPedals'),
       rotateHint: document.getElementById('rotateHint'),
       rotateContinueBtn: document.getElementById('rotateContinueBtn'),
       impactFlash: document.getElementById('impactFlash')
@@ -1141,17 +1047,8 @@
 
     bindTouchButton(el.btnAccel, ['w', 'arrowup']);
     bindTouchButton(el.btnBrake, ['s', 'arrowdown']);
-    // Steer buttons are hidden on mobile; they'll only work if manually shown
     bindTouchButton(el.btnLeft, ['a', 'arrowleft']);
     bindTouchButton(el.btnRight, ['d', 'arrowright']);
-
-    el.tiltBtn.addEventListener('click', () => {
-      if (!started) startRace();
-      if (tiltEnabled) { setTiltEnabled(false); }
-      else { requestTilt(); }
-    });
-    el.invertBtn.addEventListener('click', () => { tiltInverted = !tiltInverted; });
-    el.swapAxisBtn.addEventListener('click', () => { tiltAxisSwapped = !tiltAxisSwapped; tiltBaseline = null; smoothedTilt = null; calibrationSamples = []; tiltSteer = 0; });
 
     function formatTime(sec) {
       const m = Math.floor(sec / 60);
@@ -1167,14 +1064,8 @@
         started = true;
         initAudio();
         el.overlay.style.display = 'none';
-
-        // Auto-lock landscape on mobile
         if (isMobile) {
           lockLandscape();
-          // Hide steer buttons, tilt is default
-          if (el.touchSteer) el.touchSteer.style.display = 'none';
-          // Activate tilt automatically
-          if (!tiltEnabled) requestTilt();
         }
       }
     }
@@ -1192,11 +1083,15 @@
     }
 
     // ---------- MAIN UPDATE ----------
+    // Add slight steering smoothing for touch (instant on keyboard is fine,
+    // but on mobile a tiny ramp avoids jerky direction changes)
+    let currentSteerValue = 0;
+    const STEER_RAMP_SPEED = 8.0; // how fast the smoothed steering approaches raw input
+
     function update(dt) {
       updateTraffic(dt);
       updateMusicScheduler();
       updateSparks(dt);
-      checkTiltSignal();
       if (!started || state.finished) return;
       state.raceClock += dt;
 
@@ -1217,10 +1112,19 @@
       const turnStrength = rampUp * highSpeedEase;
       const speedFactor = Math.sign(state.speed || 1) * turnStrength;
 
-      let steerInput = tiltSteer;
-      if (left) steerInput -= 1;
-      if (right) steerInput += 1;
-      steerInput = Math.max(-1, Math.min(1, steerInput));
+      // Raw digital input
+      let rawSteer = 0;
+      if (left) rawSteer -= 1;
+      if (right) rawSteer += 1;
+
+      // Smooth towards target
+      if (rawSteer !== 0) {
+        currentSteerValue += (rawSteer - currentSteerValue) * Math.min(1, STEER_RAMP_SPEED * dt);
+      } else {
+        // Quickly return to zero when no input
+        currentSteerValue += (0 - currentSteerValue) * Math.min(1, STEER_RAMP_SPEED * 2 * dt);
+      }
+      const steerInput = Math.max(-1, Math.min(1, currentSteerValue));
 
       state.heading += TURN_RATE * speedFactor * steerInput * dt;
       if (steerInput !== 0) {
