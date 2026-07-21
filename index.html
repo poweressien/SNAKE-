@@ -63,7 +63,8 @@
 
   .touchGroup { position: fixed; display: flex; gap: 16px; z-index: 5; }
   #touchSteer { left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
-  #touchPedals { right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); flex-direction: row-reverse; }
+  /* Pedals: brake left, accel right (default row direction) */
+  #touchPedals { right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); flex-direction: row; }
 
   .touchBtn {
     pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
@@ -97,7 +98,9 @@
   }
 
   @media (pointer: coarse) {
-    #tiltControls, #touchSteer, #touchPedals { display: flex; }
+    #tiltControls, #touchPedals { display: flex; }
+    /* Steer buttons hidden by default, only shown if tilt fails */
+    #touchSteer { display: none; }
     #tiltControls { position: fixed; top: 68px; right: 18px; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 5; }
     #hint { display: none; }
     #bottomRight { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
@@ -195,9 +198,9 @@
     <button id="muteBtn" title="Toggle music (M)">&#128266;</button>
 
     <div id="tiltControls">
-      <button id="tiltBtn" class="pillBtn">Tilt: Off</button>
-      <button id="invertBtn" class="pillBtn" style="display:none;">&#8646; Invert</button>
-      <button id="swapAxisBtn" class="pillBtn" style="display:none;">&#8645; Swap Axis</button>
+      <button id="tiltBtn" class="pillBtn">Tilt: On</button>
+      <button id="invertBtn" class="pillBtn" style="display:flex;">&#8646; Invert</button>
+      <button id="swapAxisBtn" class="pillBtn" style="display:flex;">&#8645; Swap Axis</button>
     </div>
 
     <div id="touchSteer" class="touchGroup">
@@ -261,8 +264,8 @@
     const ACCEL_RATE = 26;
     const BRAKE_RATE = 42;
     const DRAG = 0.55;
-    const GRASS_DRAG = 6.0;          // extra deceleration when off-track (m/s²)
-    const TURN_RATE = 1.85;          // reduced for stable cornering on mobile
+    const GRASS_DRAG = 6.0;
+    const TURN_RATE = 1.85;
     const TURN_LOW_SPEED_RAMP = 8;
     const TURN_HIGH_SPEED_SOFTEN = 16;
     const TURN_MIN_STRENGTH = 0.3;
@@ -339,9 +342,9 @@
     road.material = roadMat;
 
     // ---------- PAVEMENT ----------
+    const wallLimit = ROAD_HALF_WIDTH + PAVEMENT_WIDTH;
     const pavementOuterLeft = [];
     const pavementOuterRight = [];
-    const wallLimit = ROAD_HALF_WIDTH + PAVEMENT_WIDTH;
     for (let i = 0; i < N; i++) {
       const p = trackPath[i];
       const perp = perpAt(i);
@@ -820,6 +823,15 @@
       if (lastOrientationEventTime === 0 && Date.now() - tiltEnabledAt > 2000) {
         tiltNoSignalWarned = true;
         if (el.tiltBtn) el.tiltBtn.textContent = 'Tilt: No signal';
+        // Fallback: show steer buttons if tilt fails
+        if (el.touchSteer) el.touchSteer.style.display = 'flex';
+      }
+    }
+
+    // ---------- LANDSCAPE LOCK ----------
+    function lockLandscape() {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
       }
     }
 
@@ -994,7 +1006,7 @@
       }
     }
 
-    // ---------- IMPACT EFFECTS (only for traffic bumps now) ----------
+    // ---------- IMPACT EFFECTS (traffic bumps only) ----------
     const sparkMat = new BABYLON.StandardMaterial('sparkMat', scene);
     sparkMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
     sparkMat.emissiveColor = new BABYLON.Color3(1, 0.75, 0.2);
@@ -1117,6 +1129,8 @@
       btnRight: document.getElementById('btnRight'),
       btnAccel: document.getElementById('btnAccel'),
       btnBrake: document.getElementById('btnBrake'),
+      touchSteer: document.getElementById('touchSteer'),
+      touchPedals: document.getElementById('touchPedals'),
       rotateHint: document.getElementById('rotateHint'),
       rotateContinueBtn: document.getElementById('rotateContinueBtn'),
       impactFlash: document.getElementById('impactFlash')
@@ -1125,10 +1139,11 @@
     el.muteBtn.addEventListener('click', toggleMute);
     el.rotateContinueBtn.addEventListener('click', () => { el.rotateHint.style.display = 'none'; });
 
-    bindTouchButton(el.btnLeft, ['a', 'arrowleft']);
-    bindTouchButton(el.btnRight, ['d', 'arrowright']);
     bindTouchButton(el.btnAccel, ['w', 'arrowup']);
     bindTouchButton(el.btnBrake, ['s', 'arrowdown']);
+    // Steer buttons are hidden on mobile; they'll only work if manually shown
+    bindTouchButton(el.btnLeft, ['a', 'arrowleft']);
+    bindTouchButton(el.btnRight, ['d', 'arrowright']);
 
     el.tiltBtn.addEventListener('click', () => {
       if (!started) startRace();
@@ -1145,10 +1160,23 @@
     }
 
     let started = false;
+    const isMobile = window.matchMedia('(pointer: coarse)').matches;
+
     function startRace() {
-      started = true;
-      initAudio();
-      el.overlay.style.display = 'none';
+      if (!started) {
+        started = true;
+        initAudio();
+        el.overlay.style.display = 'none';
+
+        // Auto-lock landscape on mobile
+        if (isMobile) {
+          lockLandscape();
+          // Hide steer buttons, tilt is default
+          if (el.touchSteer) el.touchSteer.style.display = 'none';
+          // Activate tilt automatically
+          if (!tiltEnabled) requestTilt();
+        }
+      }
     }
     el.startBtn.addEventListener('click', startRace);
     el.restartBtn.addEventListener('click', restartRace);
@@ -1202,7 +1230,6 @@
       state.x += Math.sin(state.heading) * state.speed * dt;
       state.z += Math.cos(state.heading) * state.speed * dt;
 
-      // --- OFF-ROAD HANDLING (soft slowdown, no collision effects) ---
       const nearest = nearestTrackIndex(state.x, state.z);
       const nearestPoint = trackPath[nearest.index];
       const perpHere = perpAt(nearest.index);
@@ -1219,12 +1246,10 @@
         const correction = targetLateral - lateral;
         state.x += perpHere.x * correction;
         state.z += perpHere.z * correction;
-        // no impact effects, no speed loss
       }
 
       el.offTrack.classList.toggle('show', onGrass);
 
-      // Lap progress
       let indexDelta = nearest.index - state.lastNearestIndex;
       if (indexDelta > N / 2) indexDelta -= N;
       if (indexDelta < -N / 2) indexDelta += N;
