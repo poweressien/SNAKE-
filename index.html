@@ -1068,14 +1068,22 @@
     ];
     let traffic = [];
 
+    // ---------- GENERATE ROOM CODE ----------
+    const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    function generateRoomCode() {
+      let code = '';
+      for (let i = 0; i < 4; i++) {
+        code += CHARS[Math.floor(Math.random() * CHARS.length)];
+      }
+      return code;
+    }
+
     // ---------- MULTIPLAYER ----------
-    function initPeer(callback) {
+    function initPeer(roomCode, callback) {
       try {
-        peer = new Peer(undefined, {
-          host: '0.peerjs.com',
-          port: 443,
-          secure: true
-        });
+        const options = { host: '0.peerjs.com', port: 443, secure: true };
+        if (roomCode) options.id = roomCode;
+        peer = new Peer(roomCode || undefined, options);
         peer.on('open', (id) => {
           localPlayerId = id;
           if (callback) callback(id);
@@ -1118,8 +1126,7 @@
         });
         setStatus('Player connected!');
         if (!isHost) {
-          // guest auto-starts
-          startMultiplayerGame();
+          startMultiplayerGame(); // auto-start for guest
         }
       });
     }
@@ -1308,7 +1315,6 @@
       started = true;
       initAudio();
       el.overlay.style.display = 'none';
-      // Common setup
       localState = {
         x: trackPath[0].x, z: trackPath[0].z,
         heading: startHeading, speed: 0, roll: 0,
@@ -1332,18 +1338,19 @@
       localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
     }
 
-    // Host flow: Create Room -> show code -> Start Race button
+    // Host: Create Room -> code displayed, then host can start
     el.createBtn.addEventListener('click', () => {
       isHost = true;
       multiplayerActive = true;
-      setStatus('Connecting...');
-      initPeer((id) => {
-        el.roomIdDisplay.textContent = id.substring(0,4);
+      setStatus('Generating room...');
+      const roomCode = generateRoomCode();
+      initPeer(roomCode, (id) => {
+        el.roomIdDisplay.textContent = id; // id equals roomCode
         el.roomInfo.classList.remove('hidden');
         el.createBtn.classList.add('hidden');
         el.roomCodeInput.classList.add('hidden');
         el.joinBtn.classList.add('hidden');
-        setStatus('Share this code with a friend');
+        setStatus('Share this code: ' + id);
       });
     });
 
@@ -1351,21 +1358,24 @@
       startMultiplayerGame();
     });
 
-    // Guest flow: enter code, Join Room
+    // Guest: enter code and join
     el.joinBtn.addEventListener('click', () => {
       const code = el.roomCodeInput.value.trim().toUpperCase();
-      if (!code) return;
+      if (code.length !== 4) {
+        setStatus('Enter a 4‑character code');
+        return;
+      }
       isHost = false;
       multiplayerActive = true;
       setStatus('Connecting to room...');
-      initPeer(() => {
+      initPeer(null, () => {
         const conn = peer.connect(code);
         setupDataChannel(conn);
       });
     });
 
     el.copyBtn.addEventListener('click', () => {
-      const code = localPlayerId ? localPlayerId.substring(0,4) : '';
+      const code = localPlayerId ? localPlayerId : '';
       navigator.clipboard.writeText(code).then(() => setStatus('Copied!'));
     });
 
