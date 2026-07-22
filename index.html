@@ -69,6 +69,17 @@
   .touchBtn.accel { background: rgba(255,182,39,0.22); }
   .touchBtn.pedal { width: 68px; height: 68px; font-size: 26px; }
 
+  #countdownOverlay {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 120px; font-weight: 700;
+    color: var(--amber);
+    background: rgba(0,0,0,0.5);
+    pointer-events: none;
+    display: none;
+  }
+
   #rotateHint {
     display: none; position: fixed; inset: 0; z-index: 20;
     background: #05060a; color: var(--text); text-align: center;
@@ -175,6 +186,12 @@
     margin: 10px 0;
     display: none;
   }
+  #lobbyPlayers {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin: 10px 0;
+    display: none;
+  }
   #multiplayerStatus {
     font-size: 14px;
     color: var(--text-dim);
@@ -214,6 +231,8 @@
     <div id="hint">WASD / Arrow keys to drive &middot; R to restart &middot; M to mute music</div>
 
     <button id="muteBtn" title="Toggle music (M)">&#128266;</button>
+
+    <div id="countdownOverlay">3</div>
 
     <div id="touchSteer" class="touchGroup">
       <button id="btnLeft" class="touchBtn">&#9664;</button>
@@ -261,6 +280,7 @@
       <div id="roomInfo" class="hidden">
         <div id="roomIdDisplay"></div>
         <button id="copyBtn">Copy Code</button>
+        <div id="lobbyPlayers"></div>
         <button id="hostStartBtn">Start Race</button>
       </div>
       <div>
@@ -303,6 +323,8 @@
     const TURN_HIGH_SPEED_SOFTEN = 16;
     const TURN_MIN_STRENGTH = 0.3;
     const CORNER_SCRUB = 5.5;
+
+    const PLAYER_COLORS = ['#ff5a3c', '#3a86ff', '#8338ec', '#06d6a0'];
 
     // ---------- ENGINE / SCENE ----------
     const canvas = document.getElementById('renderCanvas');
@@ -351,6 +373,7 @@
 
     const startTangent = tangentAt(0);
     const startHeading = Math.atan2(startTangent.x, startTangent.z);
+    const startPerp = perpAt(0);
 
     // ---------- ROAD MESH ----------
     const leftEdge = [];
@@ -642,17 +665,13 @@
       return root;
     }
 
-    // ---------- NAME LABEL HELPER ----------
+    // ---------- NAME LABEL ----------
     function createNameLabel(name, parentCarRoot) {
-      // Dynamic texture on a plane, billboarded
-      const fontSize = 48; // increased for clarity
-      const planeWidth = 3.0;
-      const planeHeight = 0.8;
       const dynTex = new BABYLON.DynamicTexture('label_' + name, { width: 256, height: 64 }, scene, true);
       const ctx = dynTex.getContext();
       ctx.fillStyle = 'rgba(0,0,0,0)';
       ctx.fillRect(0, 0, 256, 64);
-      ctx.font = 'bold ' + fontSize + 'px Space Grotesk, sans-serif';
+      ctx.font = 'bold 48px Space Grotesk, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#ffffff';
@@ -665,11 +684,11 @@
       mat.specularColor = new BABYLON.Color3(0,0,0);
       mat.useAlphaFromDiffuseTexture = true;
 
-      const plane = BABYLON.MeshBuilder.CreatePlane('labelPlane_' + name, { width: planeWidth, height: planeHeight }, scene);
+      const plane = BABYLON.MeshBuilder.CreatePlane('labelPlane_' + name, { width: 3.0, height: 0.8 }, scene);
       plane.material = mat;
       plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
       plane.parent = parentCarRoot;
-      plane.position.y = 2.5; // above car roof
+      plane.position.y = 2.5;
       return plane;
     }
 
@@ -1017,6 +1036,7 @@
       playerNameInput: document.getElementById('playerNameInput'),
       roomIdDisplay: document.getElementById('roomIdDisplay'),
       roomInfo: document.getElementById('roomInfo'),
+      lobbyPlayers: document.getElementById('lobbyPlayers'),
       multiplayerStatus: document.getElementById('multiplayerStatus'),
       lapCount: document.getElementById('lapCount'),
       lapTime: document.getElementById('lapTime'),
@@ -1025,6 +1045,7 @@
       speedValue: document.getElementById('speedValue'),
       offTrack: document.getElementById('offTrack'),
       muteBtn: document.getElementById('muteBtn'),
+      countdownOverlay: document.getElementById('countdownOverlay'),
       btnLeft: document.getElementById('btnLeft'),
       btnRight: document.getElementById('btnRight'),
       btnAccel: document.getElementById('btnAccel'),
@@ -1045,7 +1066,6 @@
     function saveName(name) {
       localStorage.setItem(STORAGE_KEY, name);
     }
-    // Set input value from saved name
     const savedName = getSavedName();
     if (savedName) el.playerNameInput.value = savedName;
     el.playerNameInput.addEventListener('input', () => {
@@ -1102,30 +1122,29 @@
     let multiplayerActive = false;
     let isHost = false;
     let peer = null;
-    let connections = {};   // peerId -> { dc, car, state, label }
+    let connections = {};       // peerId -> { dc, car, state, label, name, color }
     let localPlayerId = null;
     let localState = null;
     let localCar = null;
     let localName = '';
+    let localColor = '';       // assigned by host (or host's own)
 
-    // Traffic
-    let trackLength = 0;
-    for (let i = 0; i < N; i++) {
-      const a = trackPath[i], b = trackPath[(i + 1) % N];
-      trackLength += Math.sqrt((b.x - a.x) ** 2 + (b.z - a.z) ** 2);
+    // Countdown
+    let countdownActive = false;
+    let countdownStartTime = 0;
+    let countdownDuration = 3; // seconds (3,2,1,GO)
+
+    // Starting grid offsets
+    function getStartPosition(index, totalPlayers) {
+      const perp = startPerp;
+      const spacing = 3.0; // distance between cars
+      const base = trackPath[0];
+      // offset perpendicular to track direction
+      const offset = (index - (totalPlayers-1)/2) * spacing;
+      return base.add(perp.scale(offset));
     }
-    const avgSegLen = trackLength / N;
-    const TRAFFIC_CONFIG = [
-      { color: '#3a86ff', type: 'suv',    startFrac: 0.08, speed: 14, lane: -2.4 },
-      { color: '#8338ec', type: 'sports', startFrac: 0.22, speed: 20, lane: 2.0 },
-      { color: '#fb5607', type: 'truck',  startFrac: 0.38, speed: 11, lane: -1.8 },
-      { color: '#06d6a0', type: 'sedan',  startFrac: 0.55, speed: 16, lane: 2.6 },
-      { color: '#ffbe0b', type: 'suv',    startFrac: 0.70, speed: 13, lane: -2.8 },
-      { color: '#ef476f', type: 'sports', startFrac: 0.85, speed: 18, lane: 1.5 }
-    ];
-    let traffic = [];
 
-    // ---------- GENERATE ROOM CODE ----------
+    // ---------- MULTIPLAYER ----------
     const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     function generateRoomCode() {
       let code = '';
@@ -1135,7 +1154,6 @@
       return code;
     }
 
-    // ---------- MULTIPLAYER ----------
     function initPeer(roomCode, callback) {
       try {
         const options = { host: '0.peerjs.com', port: 443, secure: true };
@@ -1156,65 +1174,108 @@
       }
     }
 
+    function updateLobbyList() {
+      if (!isHost) return;
+      let players = [];
+      if (localName) players.push(localName + ' (You)');
+      for (const [id, conn] of Object.entries(connections)) {
+        if (conn.name) players.push(conn.name);
+      }
+      el.lobbyPlayers.textContent = 'Players: ' + (players.length > 0 ? players.join(', ') : 'none');
+    }
+
     function setupDataChannel(conn) {
       conn.on('open', () => {
-        const remoteCar = createCar(['#3a86ff','#8338ec','#06d6a0','#ffbe0b'][Object.keys(connections).length % 4], 'sedan', 'remote_' + conn.peer);
+        // Host assigns color
+        const colorIdx = Object.keys(connections).length % PLAYER_COLORS.length;
+        const color = PLAYER_COLORS[colorIdx];
+        const remoteCar = createCar(color, 'sedan', 'remote_' + conn.peer);
         const labelPlane = createNameLabel('', remoteCar);
         connections[conn.peer] = {
           dc: conn,
           car: remoteCar,
           state: {
-            x: trackPath[0].x + 2, z: trackPath[0].z + 2,
+            x: trackPath[0].x, z: trackPath[0].z,
             heading: startHeading, speed: 0, roll: 0,
             lastNearestIndex: 0, progress: 0,
             lap: 1, lapStart: 0, raceClock: 0,
             bestLap: null, finished: false
           },
           label: labelPlane,
-          name: ''
+          name: '',
+          color: color
         };
-        if (isHost) {
-          // Send initial state with names
-          broadcastState();
+        // Send welcome with color and all current players info
+        const playersInfo = {};
+        playersInfo[localPlayerId] = { name: localName, color: localColor };
+        for (const [id, c] of Object.entries(connections)) {
+          playersInfo[id] = { name: c.name, color: c.color };
         }
-        conn.on('data', (data) => {
-          handleData(conn.peer, data);
-        });
-        conn.on('close', () => {
-          if (connections[conn.peer] && connections[conn.peer].car) {
-            connections[conn.peer].car.dispose();
-            if (connections[conn.peer].label) connections[conn.peer].label.dispose();
-          }
+        conn.send({ type: 'welcome', color: color, players: playersInfo });
+        updateLobbyList();
+        broadcastState(); // send initial state
+      });
+      conn.on('data', (data) => {
+        handleData(conn.peer, data);
+      });
+      conn.on('close', () => {
+        if (connections[conn.peer]) {
+          if (connections[conn.peer].car) connections[conn.peer].car.dispose();
+          if (connections[conn.peer].label) connections[conn.peer].label.dispose();
           delete connections[conn.peer];
-        });
-        setStatus('Player connected!');
-        if (!isHost) {
-          startMultiplayerGame();
         }
+        updateLobbyList();
       });
     }
 
     function handleData(senderId, data) {
       if (isHost) {
-        const remote = connections[senderId];
-        if (!remote || !remote.state || remote.state.finished) return;
-        simulateCar(remote.state, data);
-        // Update name if received
-        if (data.name) {
-          remote.name = data.name;
-          updateNameLabel(remote.label, data.name);
+        if (data.type === 'input') {
+          const remote = connections[senderId];
+          if (!remote || !remote.state || remote.state.finished) return;
+          if (data.name && !remote.name) {
+            remote.name = data.name;
+            updateNameLabel(remote.label, data.name);
+            updateLobbyList();
+            broadcastState(); // send updated names
+          }
+          simulateCar(remote.state, data);
         }
       } else {
         if (data.type === 'state') {
-          updateRemoteStates(data.players);
-          // Also handle names from state message
-          if (data.names) {
-            for (const [id, name] of Object.entries(data.names)) {
-              if (connections[id] && connections[id].label) {
-                connections[id].name = name;
-                updateNameLabel(connections[id].label, name);
-              }
+          updateRemoteStates(data.players, data.colors);
+        } else if (data.type === 'start') {
+          startCountdown();
+        } else if (data.type === 'welcome') {
+          // Guest receives own color and list of other players
+          localColor = data.color;
+          // Update local car color (if already created)
+          if (localCar) {
+            // We'll recreate with new color later
+          }
+          // Create remote cars for other players (excluding self)
+          for (const [id, info] of Object.entries(data.players)) {
+            if (id !== localPlayerId && !connections[id]) {
+              const remoteCar = createCar(info.color, 'sedan', 'remote_' + id);
+              const labelPlane = createNameLabel(info.name || '', remoteCar);
+              connections[id] = {
+                dc: null,
+                car: remoteCar,
+                state: null,
+                label: labelPlane,
+                name: info.name,
+                color: info.color
+              };
             }
+          }
+          // Recreate local car with correct color
+          if (localCar) localCar.dispose();
+          localCar = createCar(localColor, 'sedan', 'player');
+          createNameLabel(localName, localCar);
+          camera.lockedTarget = localCar;
+          if (localState) {
+            localCar.position.set(localState.x, 0, localState.z);
+            localCar.rotation.y = localState.heading;
           }
         }
       }
@@ -1240,16 +1301,14 @@
     function broadcastState() {
       if (!isHost || !peer) return;
       const players = {};
-      const names = {};
-      // Host's own state
+      const colors = {};
       players[localPlayerId] = {
         x: localState.x, z: localState.z,
         heading: localState.heading, speed: localState.speed, roll: localState.roll,
         lap: localState.lap, lapStart: localState.lapStart,
         bestLap: localState.bestLap, finished: localState.finished
       };
-      names[localPlayerId] = localName;
-      // Remote states
+      colors[localPlayerId] = localColor;
       for (const [id, conn] of Object.entries(connections)) {
         if (conn.state) {
           players[id] = {
@@ -1258,10 +1317,10 @@
             lap: conn.state.lap, lapStart: conn.state.lapStart,
             bestLap: conn.state.bestLap, finished: conn.state.finished
           };
-          names[id] = conn.name || '';
+          colors[id] = conn.color;
         }
       }
-      const msg = { type: 'state', players, names };
+      const msg = { type: 'state', players, colors };
       for (const conn of Object.values(connections)) {
         if (conn.dc && conn.dc.open) {
           conn.dc.send(msg);
@@ -1269,14 +1328,14 @@
       }
     }
 
-    function updateRemoteStates(players) {
+    function updateRemoteStates(players, colors) {
       for (const [id, data] of Object.entries(players)) {
         if (id === localPlayerId) continue;
         if (!connections[id]) {
-          const colorIdx = Object.keys(connections).length % 4;
-          const car = createCar(['#3a86ff','#8338ec','#06d6a0','#ffbe0b'][colorIdx], 'sedan', 'remote_' + id);
+          const color = colors[id] || PLAYER_COLORS[Object.keys(connections).length % PLAYER_COLORS.length];
+          const car = createCar(color, 'sedan', 'remote_' + id);
           const labelPlane = createNameLabel('', car);
-          connections[id] = { dc: null, car, state: null, label: labelPlane, name: '' };
+          connections[id] = { dc: null, car, state: null, label: labelPlane, name: '', color };
         }
         const remote = connections[id];
         if (remote.car) {
@@ -1284,20 +1343,20 @@
           remote.car.rotation.y = data.heading;
           remote.car.rotation.z = data.roll;
         }
-        if (remote.state) {
-          Object.assign(remote.state, data);
-        }
+        if (remote.state) Object.assign(remote.state, data);
+        if (colors && colors[id] && !remote.color) remote.color = colors[id];
       }
     }
 
     function sendInputToHost() {
       if (isHost || !peer || Object.keys(connections).length === 0) return;
       const input = {
+        type: 'input',
         accel: isDown('w', 'arrowup'),
         brake: isDown('s', 'arrowdown'),
         left: isDown('a', 'arrowleft'),
         right: isDown('d', 'arrowright'),
-        name: localName  // send name periodically
+        name: localName
       };
       for (const conn of Object.values(connections)) {
         if (conn.dc && conn.dc.open) {
@@ -1349,7 +1408,50 @@
       st.raceClock += dt;
     }
 
+    // ---------- COUNTDOWN & START ----------
+    function startCountdown() {
+      countdownActive = true;
+      countdownStartTime = Date.now();
+      el.countdownOverlay.style.display = 'flex';
+      el.countdownOverlay.textContent = '3';
+    }
+
+    function updateCountdown() {
+      if (!countdownActive) return;
+      const elapsed = (Date.now() - countdownStartTime) / 1000;
+      if (elapsed >= countdownDuration + 1) {
+        // GO finished
+        countdownActive = false;
+        el.countdownOverlay.style.display = 'none';
+        return;
+      }
+      if (elapsed >= countdownDuration) {
+        el.countdownOverlay.textContent = 'GO!';
+      } else {
+        const remaining = Math.ceil(countdownDuration - elapsed);
+        el.countdownOverlay.textContent = String(remaining);
+      }
+    }
+
+    // ---------- TRAFFIC (only solo) ----------
+    let trackLength = 0;
+    for (let i = 0; i < N; i++) {
+      const a = trackPath[i], b = trackPath[(i + 1) % N];
+      trackLength += Math.sqrt((b.x - a.x) ** 2 + (b.z - a.z) ** 2);
+    }
+    const avgSegLen = trackLength / N;
+    const TRAFFIC_CONFIG = [
+      { color: '#3a86ff', type: 'suv',    startFrac: 0.08, speed: 14, lane: -2.4 },
+      { color: '#8338ec', type: 'sports', startFrac: 0.22, speed: 20, lane: 2.0 },
+      { color: '#fb5607', type: 'truck',  startFrac: 0.38, speed: 11, lane: -1.8 },
+      { color: '#06d6a0', type: 'sedan',  startFrac: 0.55, speed: 16, lane: 2.6 },
+      { color: '#ffbe0b', type: 'suv',    startFrac: 0.70, speed: 13, lane: -2.8 },
+      { color: '#ef476f', type: 'sports', startFrac: 0.85, speed: 18, lane: 1.5 }
+    ];
+    let traffic = [];
+
     function updateTraffic(dt) {
+      if (!localState || traffic.length === 0) return;
       traffic.forEach((tc) => {
         tc.floatIdx += (tc.speed * dt) / avgSegLen;
         if (tc.floatIdx >= N) tc.floatIdx -= N;
@@ -1396,6 +1498,7 @@
       started = true;
       multiplayerActive = false;
       localName = getPlayerName();
+      localColor = PLAYER_COLORS[0];
       initAudio();
       el.overlay.style.display = 'none';
       localState = {
@@ -1411,47 +1514,65 @@
         speed: cfg.speed,
         lane: cfg.lane
       }));
-      localCar = createCar('#ff5a3c', 'sedan', 'player');
-      // optional: show name label in solo
+      localCar = createCar(localColor, 'sedan', 'player');
       createNameLabel(localName, localCar);
       camera.lockedTarget = localCar;
-      localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
+      // Start countdown immediately for solo
+      startCountdown();
     }
 
-    function startMultiplayerGame() {
+    function setupMultiplayerGame() {
       started = true;
-      localName = getPlayerName();
       initAudio();
       el.overlay.style.display = 'none';
       localState = {
-        x: trackPath[0].x, z: trackPath[0].z,
+        x: 0, z: 0, // will be set by grid
         heading: startHeading, speed: 0, roll: 0,
         lastNearestIndex: 0, progress: 0,
         lap: 1, lapStart: 0, raceClock: 0,
         bestLap: null, finished: false
       };
+      traffic = []; // no traffic in multiplayer
+
       if (isHost) {
-        traffic = TRAFFIC_CONFIG.map((cfg, i) => ({
-          root: createCar(cfg.color, cfg.type, 'ai' + i),
-          floatIdx: cfg.startFrac * N,
-          speed: cfg.speed,
-          lane: cfg.lane
-        }));
-        localCar = createCar('#ff5a3c', 'sedan', 'player');
+        // Set starting grid positions
+        const allPlayers = [localPlayerId, ...Object.keys(connections)];
+        const total = allPlayers.length;
+        allPlayers.forEach((id, idx) => {
+          const pos = getStartPosition(idx, total);
+          if (id === localPlayerId) {
+            localState.x = pos.x;
+            localState.z = pos.z;
+          } else {
+            if (connections[id] && connections[id].state) {
+              connections[id].state.x = pos.x;
+              connections[id].state.z = pos.z;
+            }
+          }
+        });
+        // Create local car if not exists
+        if (!localCar) {
+          localCar = createCar(localColor, 'sedan', 'player');
+          createNameLabel(localName, localCar);
+          camera.lockedTarget = localCar;
+        }
+        localCar.position.set(localState.x, 0, localState.z);
       } else {
-        traffic = [];
-        localCar = createCar('#3a86ff', 'sedan', 'player');
+        // Guest: local car already created in welcome handler
+        if (!localCar) {
+          localCar = createCar(localColor, 'sedan', 'player');
+          createNameLabel(localName, localCar);
+          camera.lockedTarget = localCar;
+        }
       }
-      createNameLabel(localName, localCar);
-      camera.lockedTarget = localCar;
-      localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
     }
 
-    // Host flow
+    // Host: Create Room
     el.createBtn.addEventListener('click', () => {
       isHost = true;
       multiplayerActive = true;
       localName = getPlayerName();
+      localColor = PLAYER_COLORS[0];
       setStatus('Generating room...');
       const roomCode = generateRoomCode();
       initPeer(roomCode, (id) => {
@@ -1460,15 +1581,27 @@
         el.createBtn.classList.add('hidden');
         el.roomCodeInput.classList.add('hidden');
         el.joinBtn.classList.add('hidden');
+        el.lobbyPlayers.style.display = 'block';
+        updateLobbyList();
         setStatus('Share this code: ' + id);
       });
     });
 
+    // Host: Start Race
     el.hostStartBtn.addEventListener('click', () => {
-      startMultiplayerGame();
+      if (!isHost) return;
+      setupMultiplayerGame();
+      // Send start signal to all guests
+      for (const conn of Object.values(connections)) {
+        if (conn.dc && conn.dc.open) {
+          conn.dc.send({ type: 'start' });
+        }
+      }
+      // Start countdown for host
+      startCountdown();
     });
 
-    // Guest flow
+    // Guest: Join Room
     el.joinBtn.addEventListener('click', () => {
       const code = el.roomCodeInput.value.trim().toUpperCase();
       if (code.length !== 4) {
@@ -1500,6 +1633,9 @@
       }
       el.gameOverScreen.style.display = 'none';
       el.overlay.style.display = 'none';
+      if (multiplayerActive) {
+        // Not trivial to restart multiplayer; for now just reset local
+      }
     }
 
     el.startBtn.addEventListener('click', showMultiplayerMenu);
@@ -1514,12 +1650,25 @@
     function update(dt) {
       updateMusicScheduler();
       updateSparks(dt);
+      updateCountdown();
       if (!started || !localState) return;
 
       const accel = isDown('w', 'arrowup');
       const brake = isDown('s', 'arrowdown');
       const left = isDown('a', 'arrowleft');
       const right = isDown('d', 'arrowright');
+
+      // Disable controls during countdown
+      if (countdownActive) {
+        if (multiplayerActive && !isHost) {
+          // guest still sends input to host (to show ready?), but host ignores until countdown ends
+          if (Date.now() - lastInputSendTime > 50) {
+            sendInputToHost();
+            lastInputSendTime = Date.now();
+          }
+        }
+        return;
+      }
 
       if (multiplayerActive && !isHost) {
         if (Date.now() - lastInputSendTime > 50) {
@@ -1544,6 +1693,7 @@
         return;
       }
 
+      // Host or solo
       localState.raceClock += dt;
       if (accel) localState.speed += ACCEL_RATE * dt;
       if (brake) localState.speed -= BRAKE_RATE * dt;
@@ -1610,7 +1760,7 @@
         localCar.rotation.z = steerInput * 0.12 * turnStrength;
       }
 
-      if (traffic.length > 0) updateTraffic(dt);
+      if (!multiplayerActive && traffic.length > 0) updateTraffic(dt);
       if (isHost && Object.keys(connections).length > 0) broadcastState();
 
       el.lapCount.textContent = localState.lap;
