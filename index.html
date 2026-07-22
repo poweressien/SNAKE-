@@ -479,6 +479,7 @@ function formatTime(sec){const m=Math.floor(sec/60);const s=sec-m*60;return m+':
 
 let started=false,multiplayerActive=false,isHost=false,peer=null,connections={},localPlayerId=null,localState=null,localCar=null,localName='',localColor='';
 let countdownActive=false,countdownStartTime=0,countdownDuration=3;
+let joinTimeoutHandle=null;
 
 function getStartPosition(index,totalPlayers){const perp=startPerp;const spacing=3.0;const base=trackPath[0];const offset=(index-(totalPlayers-1)/2)*spacing;return base.add(perp.scale(offset));}
 
@@ -487,12 +488,12 @@ function generateRoomCode(){let code='';for(let i=0;i<4;i++)code+=CHARS[Math.flo
 
 function initPeer(roomCode,callback){
   try{
-    const options={host:'0.peerjs.com',port:443,secure:true};
+    const options={host:'0.peerjs.com',port:443,secure:true,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}/* TURN server goes here once you have one — required when either side is on carrier/mobile-data NAT */]}};
     if(roomCode)options.id=roomCode;
     peer=new Peer(roomCode||undefined,options);
     peer.on('open',(id)=>{localPlayerId=id;if(callback)callback(id);});
     peer.on('connection',(conn)=>{if(isHost)setupDataChannel(conn);});
-    peer.on('error',(err)=>{setStatus('Peer error: '+err.message);});
+    peer.on('error',(err)=>{clearTimeout(joinTimeoutHandle);setStatus('Connection failed: '+err.message);multiplayerActive=false;});
   }catch(e){setStatus('PeerJS failed: '+e.message);}
 }
 
@@ -517,6 +518,7 @@ function setupDataChannel(conn){
     broadcastState();
   });
   conn.on('data',(data)=>{handleData(conn.peer,data);});
+  conn.on('error',(err)=>{clearTimeout(joinTimeoutHandle);setStatus('Connection error: '+(err&&err.message?err.message:'lost connection'));});
   conn.on('close',()=>{
     if(connections[conn.peer]){if(connections[conn.peer].car)connections[conn.peer].car.dispose();if(connections[conn.peer].label)connections[conn.peer].label.dispose();delete connections[conn.peer];}
     updateLobbyList();
@@ -530,6 +532,8 @@ function handleData(senderId,data){
     if(data.type==='state'){updateRemoteStates(data.players,data.colors);}
     else if(data.type==='start'){setupMultiplayerGame(data.x,data.z);startCountdown();}
     else if(data.type==='welcome'){
+      clearTimeout(joinTimeoutHandle);
+      setStatus('Connected! Waiting for host to start...');
       localColor=data.color;
       if(localCar){localCar.dispose();}
       localCar=createCar(localColor,'sedan','player');createNameLabel(localName,localCar);camera.lockedTarget=localCar;
@@ -665,7 +669,14 @@ el.joinBtn.addEventListener('click',()=>{
   const code=el.roomCodeInput.value.trim().toUpperCase();
   if(code.length!==4){setStatus('Enter a 4-character code');return;}
   isHost=false;multiplayerActive=true;localName=getPlayerName();setStatus('Connecting to room...');
-  initPeer(null,()=>{const conn=peer.connect(code);setupDataChannel(conn);});
+  initPeer(null,()=>{
+    const conn=peer.connect(code);
+    setupDataChannel(conn);
+    clearTimeout(joinTimeoutHandle);
+    joinTimeoutHandle=setTimeout(()=>{
+      if(!started){setStatus('Could not reach room '+code+'. Check the code, or try both devices on the same Wi-Fi network.');multiplayerActive=false;}
+    },15000);
+  });
 });
 
 el.copyBtn.addEventListener('click',()=>{const code=localPlayerId?localPlayerId:'';navigator.clipboard.writeText(code).then(()=>setStatus('Copied!'));});
