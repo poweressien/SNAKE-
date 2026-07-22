@@ -143,7 +143,7 @@
     padding: 5px 10px; border-radius: 4px; font-family: 'Space Mono', monospace;
     background: rgba(255,255,255,0.03);
   }
-  #startBtn, #restartBtn, #soloBtn, #createBtn, #joinBtn, #copyBtn {
+  #startBtn, #restartBtn, #soloBtn, #createBtn, #joinBtn, #copyBtn, #hostStartBtn {
     pointer-events: auto; cursor: pointer;
     background: var(--amber); color: #14100a; border: none;
     font-family: 'Space Grotesk', sans-serif; font-weight: 700;
@@ -153,7 +153,7 @@
     transition: filter 0.15s, box-shadow 0.15s;
     margin: 8px;
   }
-  #startBtn:hover, #restartBtn:hover, #soloBtn:hover, #createBtn:hover, #joinBtn:hover, #copyBtn:hover {
+  #startBtn:hover, #restartBtn:hover, #soloBtn:hover, #createBtn:hover, #joinBtn:hover, #copyBtn:hover, #hostStartBtn:hover {
     filter: brightness(1.08); box-shadow: 0 0 22px rgba(255,182,39,0.35);
   }
   #roomCodeInput {
@@ -173,6 +173,7 @@
     letter-spacing: 0.2em;
     color: var(--amber);
     margin: 10px 0;
+    display: none;
   }
   #multiplayerStatus {
     font-size: 14px;
@@ -183,6 +184,7 @@
   #gameOverScreen .lapResult { font-family: 'Space Mono', monospace; font-size: 15px; margin: 14px 0; color: var(--text-dim); }
   #gameOverScreen .lapResult b { color: var(--amber); font-size: 20px; }
   #multiplayerMenu { display: none; }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
@@ -251,13 +253,16 @@
       <div class="title-divider"></div>
       <button id="soloBtn">Play Solo</button>
       <button id="createBtn">Create Room</button>
+      <div id="roomInfo" class="hidden">
+        <div id="roomIdDisplay"></div>
+        <button id="copyBtn">Copy Code</button>
+        <button id="hostStartBtn">Start Race</button>
+      </div>
       <div>
         <input id="roomCodeInput" type="text" maxlength="4" placeholder="CODE">
         <button id="joinBtn">Join Room</button>
       </div>
-      <div id="roomIdDisplay"></div>
       <div id="multiplayerStatus"></div>
-      <button id="copyBtn" style="display:none;">Copy Room Code</button>
     </div>
     <div id="gameOverScreen" class="menuPanel">
       <h1><span class="word-uyo">RACE</span> <span class="word-drift">COMPLETE</span></h1>
@@ -971,8 +976,10 @@
       createBtn: document.getElementById('createBtn'),
       joinBtn: document.getElementById('joinBtn'),
       copyBtn: document.getElementById('copyBtn'),
+      hostStartBtn: document.getElementById('hostStartBtn'),
       roomCodeInput: document.getElementById('roomCodeInput'),
       roomIdDisplay: document.getElementById('roomIdDisplay'),
+      roomInfo: document.getElementById('roomInfo'),
       multiplayerStatus: document.getElementById('multiplayerStatus'),
       lapCount: document.getElementById('lapCount'),
       lapTime: document.getElementById('lapTime'),
@@ -1044,7 +1051,7 @@
     let localState = null;
     let localCar = null;
 
-    // Traffic (host only)
+    // Traffic
     let trackLength = 0;
     for (let i = 0; i < N; i++) {
       const a = trackPath[i], b = trackPath[(i + 1) % N];
@@ -1062,28 +1069,26 @@
     let traffic = [];
 
     // ---------- MULTIPLAYER ----------
-    function initPeer() {
-      peer = new Peer(undefined, {
-        host: '0.peerjs.com',
-        port: 443,
-        secure: true
-      });
-      peer.on('open', (id) => {
-        localPlayerId = id;
-        console.log('Peer ID:', id);
-        if (isHost) {
-          el.roomIdDisplay.textContent = id.substring(0,4);
-          el.copyBtn.style.display = 'inline-block';
-        }
-      });
-      peer.on('connection', (conn) => {
-        if (isHost) {
-          setupDataChannel(conn);
-        }
-      });
-      peer.on('error', (err) => {
-        setStatus('Connection error: ' + err.message);
-      });
+    function initPeer(callback) {
+      try {
+        peer = new Peer(undefined, {
+          host: '0.peerjs.com',
+          port: 443,
+          secure: true
+        });
+        peer.on('open', (id) => {
+          localPlayerId = id;
+          if (callback) callback(id);
+        });
+        peer.on('connection', (conn) => {
+          if (isHost) setupDataChannel(conn);
+        });
+        peer.on('error', (err) => {
+          setStatus('Peer error: ' + err.message);
+        });
+      } catch(e) {
+        setStatus('PeerJS failed: ' + e.message);
+      }
     }
 
     function setupDataChannel(conn) {
@@ -1112,6 +1117,10 @@
           delete connections[conn.peer];
         });
         setStatus('Player connected!');
+        if (!isHost) {
+          // guest auto-starts
+          startMultiplayerGame();
+        }
       });
     }
 
@@ -1257,7 +1266,7 @@
       });
     }
 
-    // ---------- UI & GAME FLOW ----------
+    // ---------- UI FLOW ----------
     function setStatus(msg) {
       el.multiplayerStatus.textContent = msg;
     }
@@ -1266,6 +1275,10 @@
       el.startScreen.style.display = 'none';
       el.multiplayerMenu.style.display = 'flex';
       el.gameOverScreen.style.display = 'none';
+      el.roomInfo.classList.add('hidden');
+      el.createBtn.classList.remove('hidden');
+      el.roomCodeInput.classList.remove('hidden');
+      el.joinBtn.classList.remove('hidden');
     }
 
     function startSolo() {
@@ -1291,12 +1304,11 @@
       localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
     }
 
-    function startMultiplayerAsHost() {
-      isHost = true;
-      multiplayerActive = true;
-      initPeer();
+    function startMultiplayerGame() {
+      started = true;
       initAudio();
       el.overlay.style.display = 'none';
+      // Common setup
       localState = {
         x: trackPath[0].x, z: trackPath[0].z,
         heading: startHeading, speed: 0, roll: 0,
@@ -1304,35 +1316,58 @@
         lap: 1, lapStart: 0, raceClock: 0,
         bestLap: null, finished: false
       };
-      traffic = TRAFFIC_CONFIG.map((cfg, i) => ({
-        root: createCar(cfg.color, cfg.type, 'ai' + i),
-        floatIdx: cfg.startFrac * N,
-        speed: cfg.speed,
-        lane: cfg.lane
-      }));
-      localCar = createCar('#ff5a3c', 'sedan', 'player');
+      if (isHost) {
+        traffic = TRAFFIC_CONFIG.map((cfg, i) => ({
+          root: createCar(cfg.color, cfg.type, 'ai' + i),
+          floatIdx: cfg.startFrac * N,
+          speed: cfg.speed,
+          lane: cfg.lane
+        }));
+        localCar = createCar('#ff5a3c', 'sedan', 'player');
+      } else {
+        traffic = [];
+        localCar = createCar('#3a86ff', 'sedan', 'player');
+      }
       camera.lockedTarget = localCar;
       localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
     }
 
-    function startMultiplayerAsGuest() {
+    // Host flow: Create Room -> show code -> Start Race button
+    el.createBtn.addEventListener('click', () => {
+      isHost = true;
+      multiplayerActive = true;
+      setStatus('Connecting...');
+      initPeer((id) => {
+        el.roomIdDisplay.textContent = id.substring(0,4);
+        el.roomInfo.classList.remove('hidden');
+        el.createBtn.classList.add('hidden');
+        el.roomCodeInput.classList.add('hidden');
+        el.joinBtn.classList.add('hidden');
+        setStatus('Share this code with a friend');
+      });
+    });
+
+    el.hostStartBtn.addEventListener('click', () => {
+      startMultiplayerGame();
+    });
+
+    // Guest flow: enter code, Join Room
+    el.joinBtn.addEventListener('click', () => {
+      const code = el.roomCodeInput.value.trim().toUpperCase();
+      if (!code) return;
       isHost = false;
       multiplayerActive = true;
-      initPeer();
-      initAudio();
-      el.overlay.style.display = 'none';
-      localState = {
-        x: trackPath[0].x, z: trackPath[0].z,
-        heading: startHeading, speed: 0, roll: 0,
-        lastNearestIndex: 0, progress: 0,
-        lap: 1, lapStart: 0, raceClock: 0,
-        bestLap: null, finished: false
-      };
-      traffic = [];
-      localCar = createCar('#3a86ff', 'sedan', 'player');
-      camera.lockedTarget = localCar;
-      localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
-    }
+      setStatus('Connecting to room...');
+      initPeer(() => {
+        const conn = peer.connect(code);
+        setupDataChannel(conn);
+      });
+    });
+
+    el.copyBtn.addEventListener('click', () => {
+      const code = localPlayerId ? localPlayerId.substring(0,4) : '';
+      navigator.clipboard.writeText(code).then(() => setStatus('Copied!'));
+    });
 
     function restartRace() {
       if (localState) {
@@ -1348,19 +1383,6 @@
 
     el.startBtn.addEventListener('click', showMultiplayerMenu);
     el.soloBtn.addEventListener('click', startSolo);
-    el.createBtn.addEventListener('click', startMultiplayerAsHost);
-    el.joinBtn.addEventListener('click', () => {
-      const code = el.roomCodeInput.value.trim().toUpperCase();
-      if (code && peer && !isHost) {
-        const conn = peer.connect(code);
-        setupDataChannel(conn);
-        startMultiplayerAsGuest();
-      }
-    });
-    el.copyBtn.addEventListener('click', () => {
-      const code = localPlayerId ? localPlayerId.substring(0,4) : '';
-      navigator.clipboard.writeText(code).then(() => setStatus('Copied!'));
-    });
     el.restartBtn.addEventListener('click', restartRace);
 
     // ---------- MAIN UPDATE LOOP ----------
@@ -1383,7 +1405,6 @@
           sendInputToHost();
           lastInputSendTime = Date.now();
         }
-        // Local prediction (guest)
         simulateCar(localState, { accel, brake, left, right });
         if (localCar) {
           localCar.position.set(localState.x, 0, localState.z);
@@ -1402,7 +1423,6 @@
         return;
       }
 
-      // Host (or solo) full simulation
       localState.raceClock += dt;
       if (accel) localState.speed += ACCEL_RATE * dt;
       if (brake) localState.speed -= BRAKE_RATE * dt;
