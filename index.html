@@ -3,11 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<<<<<<< HEAD
 <title>Uyo Drift — Multiplayer</title>
-=======
-<title>Uyo Drift — Babylon.js Racing Prototype</title>
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -55,82 +51,6 @@
   }
   #muteBtn:hover { filter: brightness(1.15); }
 
-<<<<<<< HEAD
-  #tiltControls, #touchSteer, #touchPedals { display: none; }
-
-  .pillBtn {
-    pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
-    background: var(--panel); border: 1px solid var(--panel-line); color: var(--text);
-    font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 500;
-    padding: 8px 12px; border-radius: 20px; backdrop-filter: blur(6px); white-space: nowrap;
-  }
-  .pillBtn:active { background: rgba(255,182,39,0.3); }
-
-  .touchGroup { position: fixed; display: flex; gap: 16px; z-index: 5; }
-  #touchSteer { left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
-  #touchPedals { right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); flex-direction: row; }
-
-  .touchBtn {
-    pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
-    touch-action: none;
-    width: 62px; height: 62px; border-radius: 50%;
-    background: rgba(12,14,20,0.6); border: 2px solid var(--panel-line); color: var(--text);
-    font-size: 24px; display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px);
-  }
-  .touchBtn:active { background: rgba(255,182,39,0.4); border-color: var(--amber); }
-  .touchBtn.accel { background: rgba(255,182,39,0.22); }
-  .touchBtn.pedal { width: 68px; height: 68px; font-size: 26px; }
-
-  #rotateHint {
-    display: none; position: fixed; inset: 0; z-index: 20;
-    background: #05060a; color: var(--text); text-align: center;
-    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
-  }
-  #rotateHint .rotateIcon { font-size: 44px; animation: rotateHintSpin 1.8s ease-in-out infinite; }
-  #rotateHint p { font-family: 'Space Grotesk', sans-serif; font-size: 15px; color: var(--text-dim); max-width: 260px; margin: 0; }
-  #rotateContinueBtn {
-    pointer-events: auto; cursor: pointer; margin-top: 14px;
-    background: transparent; color: var(--text-dim); border: 1px solid var(--panel-line);
-    font-family: 'Space Grotesk', sans-serif; font-size: 13px; letter-spacing: 0.03em;
-    padding: 10px 20px; border-radius: 20px;
-  }
-  #rotateContinueBtn:active { background: rgba(255,182,39,0.2); color: var(--text); }
-  @keyframes rotateHintSpin {
-    0%, 100% { transform: rotate(0deg); }
-    50% { transform: rotate(90deg); }
-  }
-
-  @media (pointer: coarse) {
-    #tiltControls, #touchSteer, #touchPedals { display: flex; }
-    #hint { display: none; }
-    #bottomRight { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
-  }
-  @media (pointer: coarse) and (orientation: portrait) {
-    #rotateHint { display: flex; }
-  }
-  @media (max-width: 480px) {
-    .menuPanel { padding: 34px 26px; max-width: 92vw; }
-    #overlay .controls { flex-wrap: wrap; row-gap: 14px; }
-  }
-
-  .speed-value { font-family: 'Space Mono', monospace; font-size: 52px; font-weight: 700; color: var(--amber); line-height: 1; }
-  .speed-unit { font-size: 12px; letter-spacing: 0.1em; color: var(--text-dim); }
-
-  #offTrack {
-    position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%);
-    font-family: 'Space Mono', monospace; font-size: 14px; letter-spacing: 0.2em;
-    color: var(--amber); opacity: 0; transition: opacity 0.2s; text-transform: uppercase;
-  }
-  #offTrack.show { opacity: 1; }
-
-  #impactFlash {
-    position: fixed; inset: 0; background: rgba(255,55,35,0.32);
-    opacity: 0; pointer-events: none; z-index: 8;
-  }
-
-=======
-  /* Touch controls – always shown on touch devices, no tilt */
   #touchSteer, #touchPedals { display: none; }
 
   .touchGroup { position: fixed; display: flex; gap: 16px; z-index: 5; }
@@ -196,7 +116,6 @@
     opacity: 0; pointer-events: none; z-index: 8;
   }
 
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
   #overlay {
     position: fixed; inset: 0; background: rgba(6,7,11,0.4);
     backdrop-filter: blur(2.5px);
@@ -224,20 +143,14 @@
     padding: 5px 10px; border-radius: 4px; font-family: 'Space Mono', monospace;
     background: rgba(255,255,255,0.03);
   }
-<<<<<<< HEAD
   #startBtn, #restartBtn, #soloBtn, #createBtn, #joinBtn, #copyBtn {
     pointer-events: auto; cursor: pointer;
-=======
-  #startBtn, #restartBtn {
-    pointer-events: auto; margin-top: 30px; cursor: pointer;
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
     background: var(--amber); color: #14100a; border: none;
     font-family: 'Space Grotesk', sans-serif; font-weight: 700;
     font-size: 15px; letter-spacing: 0.04em; padding: 12px 30px;
     text-transform: uppercase;
     box-shadow: 0 0 0 rgba(255,182,39,0.5);
     transition: filter 0.15s, box-shadow 0.15s;
-<<<<<<< HEAD
     margin: 8px;
   }
   #startBtn:hover, #restartBtn:hover, #soloBtn:hover, #createBtn:hover, #joinBtn:hover, #copyBtn:hover {
@@ -270,13 +183,6 @@
   #gameOverScreen .lapResult { font-family: 'Space Mono', monospace; font-size: 15px; margin: 14px 0; color: var(--text-dim); }
   #gameOverScreen .lapResult b { color: var(--amber); font-size: 20px; }
   #multiplayerMenu { display: none; }
-=======
-  }
-  #startBtn:hover, #restartBtn:hover { filter: brightness(1.08); box-shadow: 0 0 22px rgba(255,182,39,0.35); }
-  #gameOverScreen { display: none; }
-  #gameOverScreen .lapResult { font-family: 'Space Mono', monospace; font-size: 15px; margin: 14px 0; color: var(--text-dim); }
-  #gameOverScreen .lapResult b { color: var(--amber); font-size: 20px; }
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
 </style>
 </head>
 <body>
@@ -340,7 +246,6 @@
       </div>
       <button id="startBtn">Start Engine</button>
     </div>
-<<<<<<< HEAD
     <div id="multiplayerMenu" class="menuPanel">
       <h1><span class="word-uyo">MULTIPLAYER</span></h1>
       <div class="title-divider"></div>
@@ -354,8 +259,6 @@
       <div id="multiplayerStatus"></div>
       <button id="copyBtn" style="display:none;">Copy Room Code</button>
     </div>
-=======
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
     <div id="gameOverScreen" class="menuPanel">
       <h1><span class="word-uyo">RACE</span> <span class="word-drift">COMPLETE</span></h1>
       <div class="title-divider"></div>
@@ -365,10 +268,7 @@
   </div>
 
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
-<<<<<<< HEAD
   <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
-=======
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
   <script>
   (function () {
     'use strict';
@@ -388,11 +288,7 @@
     const BRAKE_RATE = 42;
     const DRAG = 0.55;
     const GRASS_DRAG = 6.0;
-<<<<<<< HEAD
     const TURN_RATE = 1.5;
-=======
-    const TURN_RATE = 1.5;           // balanced for touch – responsive but not twitchy
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
     const TURN_LOW_SPEED_RAMP = 8;
     const TURN_HIGH_SPEED_SOFTEN = 16;
     const TURN_MIN_STRENGTH = 0.3;
@@ -735,70 +631,6 @@
 
       return root;
     }
-<<<<<<< HEAD
-=======
-    const car = createCar('#ff5a3c', 'sedan', 'player');
-
-    // ---------- TRAFFIC ----------
-    let trackLength = 0;
-    for (let i = 0; i < N; i++) {
-      const a = trackPath[i], b = trackPath[(i + 1) % N];
-      trackLength += Math.sqrt((b.x - a.x) ** 2 + (b.z - a.z) ** 2);
-    }
-    const avgSegLen = trackLength / N;
-
-    const TRAFFIC_CONFIG = [
-      { color: '#3a86ff', type: 'suv',    startFrac: 0.08, speed: 14, lane: -2.4 },
-      { color: '#8338ec', type: 'sports', startFrac: 0.22, speed: 20, lane: 2.0 },
-      { color: '#fb5607', type: 'truck',  startFrac: 0.38, speed: 11, lane: -1.8 },
-      { color: '#06d6a0', type: 'sedan',  startFrac: 0.55, speed: 16, lane: 2.6 },
-      { color: '#ffbe0b', type: 'suv',    startFrac: 0.70, speed: 13, lane: -2.8 },
-      { color: '#ef476f', type: 'sports', startFrac: 0.85, speed: 18, lane: 1.5 }
-    ];
-    const traffic = TRAFFIC_CONFIG.map((cfg, i) => ({
-      root: createCar(cfg.color, cfg.type, 'ai' + i),
-      floatIdx: cfg.startFrac * N,
-      speed: cfg.speed,
-      lane: cfg.lane
-    }));
-
-    function updateTraffic(dt) {
-      traffic.forEach((tc) => {
-        tc.floatIdx += (tc.speed * dt) / avgSegLen;
-        if (tc.floatIdx >= N) tc.floatIdx -= N;
-        const i0 = Math.floor(tc.floatIdx) % N;
-        const i1 = (i0 + 1) % N;
-        const frac = tc.floatIdx - Math.floor(tc.floatIdx);
-        const p0 = trackPath[i0], p1 = trackPath[i1];
-        const perp = perpAt(i0);
-        const cx = p0.x + (p1.x - p0.x) * frac + perp.x * tc.lane;
-        const cz = p0.z + (p1.z - p0.z) * frac + perp.z * tc.lane;
-        const tangent = tangentAt(i0);
-        tc.root.position.set(cx, 0, cz);
-        tc.root.rotation.y = Math.atan2(tangent.x, tangent.z);
-
-        const dx = state.x - cx, dz = state.z - cz;
-        const distSq = dx * dx + dz * dz;
-        const minDist = 2.5;
-        if (distSq < minDist * minDist && distSq > 0.0001) {
-          const dist = Math.sqrt(distSq);
-          const overlap = minDist - dist;
-          state.x += (dx / dist) * overlap;
-          state.z += (dz / dist) * overlap;
-          state.speed *= 0.82;
-          if (Math.abs(state.speed) > 2.5) triggerImpactEffect(state.x, 0.5, state.z);
-        }
-      });
-    }
-
-    const state = {
-      x: trackPath[0].x, z: trackPath[0].z,
-      heading: startHeading, speed: 0, roll: 0,
-      lastNearestIndex: 0, progress: 0,
-      lap: 1, lapStart: 0, raceClock: 0,
-      bestLap: null, finished: false
-    };
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
 
     // ---------- TITLE GANTRY ----------
     (function addTitleGantry() {
@@ -852,7 +684,6 @@
     camera.rotationOffset = 180;
     camera.cameraAcceleration = 0.08;
     camera.maxCameraSpeed = 60;
-<<<<<<< HEAD
     scene.activeCamera = camera;
 
     // ---------- AUDIO ----------
@@ -1026,7 +857,7 @@
       }
     }
 
-    // ---------- IMPACT EFFECTS (traffic bumps only) ----------
+    // ---------- IMPACT EFFECTS ----------
     const sparkMat = new BABYLON.StandardMaterial('sparkMat', scene);
     sparkMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
     sparkMat.emissiveColor = new BABYLON.Color3(1, 0.75, 0.2);
@@ -1163,23 +994,13 @@
     el.rotateContinueBtn.addEventListener('click', () => { el.rotateHint.style.display = 'none'; });
 
     // ---------- INPUT ----------
-=======
-    camera.lockedTarget = car;
-    scene.activeCamera = camera;
-
-    // ---------- INPUT (keyboard + touch buttons only, no tilt) ----------
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
     const keys = {};
     const GAME_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'r'];
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       if (GAME_KEYS.includes(k)) e.preventDefault();
       keys[k] = true;
-<<<<<<< HEAD
-      if (!started && !multiplayerActive) startSolo();
-=======
-      if (!started) startRace();
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
+      if (!started && !multiplayerActive) showMultiplayerMenu();
       if (k === 'r') restartRace();
       if (k === 'm') toggleMute();
     });
@@ -1191,11 +1012,7 @@
       const press = (e) => {
         e.preventDefault();
         keyNames.forEach((k) => { keys[k] = true; });
-<<<<<<< HEAD
-        if (!started && !multiplayerActive) startSolo();
-=======
-        if (!started) startRace();
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
+        if (!started && !multiplayerActive) showMultiplayerMenu();
       };
       const release = (e) => {
         if (e) e.preventDefault();
@@ -1207,7 +1024,6 @@
       el.addEventListener('pointerleave', release);
     }
 
-<<<<<<< HEAD
     bindTouchButton(el.btnAccel, ['w', 'arrowup']);
     bindTouchButton(el.btnBrake, ['s', 'arrowdown']);
     bindTouchButton(el.btnLeft, ['a', 'arrowleft']);
@@ -1223,11 +1039,12 @@
     let multiplayerActive = false;
     let isHost = false;
     let peer = null;
-    let connections = {}; // peerId -> { dc: DataChannel, car: mesh, state: {...} }
+    let connections = {};
     let localPlayerId = null;
-    let localState = null; // reference to host's own state or guest's local copy
+    let localState = null;
+    let localCar = null;
 
-    // Traffic (run by host only)
+    // Traffic (host only)
     let trackLength = 0;
     for (let i = 0; i < N; i++) {
       const a = trackPath[i], b = trackPath[(i + 1) % N];
@@ -1244,11 +1061,7 @@
     ];
     let traffic = [];
 
-    // Player car colors
-    const playerColors = ['#ff5a3c', '#3a86ff', '#8338ec', '#06d6a0'];
-    let usedColors = 0;
-
-    // ---------- MULTIPLAYER SETUP ----------
+    // ---------- MULTIPLAYER ----------
     function initPeer() {
       peer = new Peer(undefined, {
         host: '0.peerjs.com',
@@ -1258,6 +1071,10 @@
       peer.on('open', (id) => {
         localPlayerId = id;
         console.log('Peer ID:', id);
+        if (isHost) {
+          el.roomIdDisplay.textContent = id.substring(0,4);
+          el.copyBtn.style.display = 'inline-block';
+        }
       });
       peer.on('connection', (conn) => {
         if (isHost) {
@@ -1273,11 +1090,9 @@
       conn.on('open', () => {
         connections[conn.peer] = { dc: conn, car: null, state: null };
         if (isHost) {
-          // Create car for remote player
-          const colorIdx = (usedColors++) % playerColors.length;
-          const remoteCar = createCar(playerColors[colorIdx], 'sedan', 'remote_' + conn.peer);
+          const colorIdx = Object.keys(connections).length % 4;
+          const remoteCar = createCar(['#3a86ff','#8338ec','#06d6a0','#ffbe0b'][colorIdx], 'sedan', 'remote_' + conn.peer);
           connections[conn.peer].car = remoteCar;
-          // Initialize state
           connections[conn.peer].state = {
             x: trackPath[0].x + 2, z: trackPath[0].z + 2,
             heading: startHeading, speed: 0, roll: 0,
@@ -1285,7 +1100,6 @@
             lap: 1, lapStart: 0, raceClock: 0,
             bestLap: null, finished: false
           };
-          // Send current game state to new player
           broadcastState();
         }
         conn.on('data', (data) => {
@@ -1303,13 +1117,10 @@
 
     function handleData(senderId, data) {
       if (isHost) {
-        // Guest sent inputs
         const remote = connections[senderId];
         if (!remote || !remote.state || remote.state.finished) return;
-        const input = data; // { accel, brake, left, right }
-        simulateCar(remote.state, input);
+        simulateCar(remote.state, data);
       } else {
-        // Host sent state update
         if (data.type === 'state') {
           updateRemoteStates(data.players);
         }
@@ -1319,14 +1130,12 @@
     function broadcastState() {
       if (!isHost || !peer) return;
       const players = {};
-      // Host's own state
       players[localPlayerId] = {
         x: localState.x, z: localState.z,
         heading: localState.heading, speed: localState.speed, roll: localState.roll,
         lap: localState.lap, lapStart: localState.lapStart,
         bestLap: localState.bestLap, finished: localState.finished
       };
-      // Remote states
       for (const [id, conn] of Object.entries(connections)) {
         if (conn.state) {
           players[id] = {
@@ -1349,9 +1158,8 @@
       for (const [id, data] of Object.entries(players)) {
         if (id === localPlayerId) continue;
         if (!connections[id]) {
-          // Create remote car for this peer
-          const colorIdx = (usedColors++) % playerColors.length;
-          const car = createCar(playerColors[colorIdx], 'sedan', 'remote_' + id);
+          const colorIdx = Object.keys(connections).length % 4;
+          const car = createCar(['#3a86ff','#8338ec','#06d6a0','#ffbe0b'][colorIdx], 'sedan', 'remote_' + id);
           connections[id] = { dc: null, car, state: null };
         }
         const remote = connections[id];
@@ -1379,7 +1187,7 @@
     }
 
     function simulateCar(st, input) {
-      const dt = 1/60; // rough fixed timestep for remote cars
+      const dt = 1/60;
       if (input.accel) st.speed += ACCEL_RATE * dt;
       if (input.brake) st.speed -= BRAKE_RATE * dt;
       st.speed -= st.speed * DRAG * dt;
@@ -1399,14 +1207,12 @@
       st.x += Math.sin(st.heading) * st.speed * dt;
       st.z += Math.cos(st.heading) * st.speed * dt;
 
-      // Collision with track (simplified)
       const nearest = nearestTrackIndex(st.x, st.z);
       const perpHere = perpAt(nearest.index);
       const lateral = (st.x - trackPath[nearest.index].x) * perpHere.x + (st.z - trackPath[nearest.index].z) * perpHere.z;
       if (Math.abs(lateral) > GRASS_LIMIT) {
         st.speed *= 0.9;
       }
-      // Lap progression (simplified)
       let indexDelta = nearest.index - st.lastNearestIndex;
       if (indexDelta > N / 2) indexDelta -= N;
       if (indexDelta < -N / 2) indexDelta += N;
@@ -1417,12 +1223,38 @@
         if (st.bestLap === null || lapTime < st.bestLap) st.bestLap = lapTime;
         st.lapStart = st.raceClock;
         st.lap++;
-        if (st.lap > TOTAL_LAPS) {
-          st.finished = true;
-        }
+        if (st.lap > TOTAL_LAPS) st.finished = true;
       }
       st.lastNearestIndex = nearest.index;
       st.raceClock += dt;
+    }
+
+    function updateTraffic(dt) {
+      traffic.forEach((tc) => {
+        tc.floatIdx += (tc.speed * dt) / avgSegLen;
+        if (tc.floatIdx >= N) tc.floatIdx -= N;
+        const i0 = Math.floor(tc.floatIdx) % N;
+        const i1 = (i0 + 1) % N;
+        const frac = tc.floatIdx - Math.floor(tc.floatIdx);
+        const p0 = trackPath[i0], p1 = trackPath[i1];
+        const perp = perpAt(i0);
+        const cx = p0.x + (p1.x - p0.x) * frac + perp.x * tc.lane;
+        const cz = p0.z + (p1.z - p0.z) * frac + perp.z * tc.lane;
+        const tangent = tangentAt(i0);
+        tc.root.position.set(cx, 0, cz);
+        tc.root.rotation.y = Math.atan2(tangent.x, tangent.z);
+
+        const dx = localState.x - cx, dz = localState.z - cz;
+        const distSq = dx * dx + dz * dz;
+        if (distSq < 6.25 && distSq > 0.0001) {
+          const dist = Math.sqrt(distSq);
+          const overlap = 2.5 - dist;
+          localState.x += (dx / dist) * overlap;
+          localState.z += (dz / dist) * overlap;
+          localState.speed *= 0.82;
+          if (Math.abs(localState.speed) > 2.5) triggerImpactEffect(localState.x, 0.5, localState.z);
+        }
+      });
     }
 
     // ---------- UI & GAME FLOW ----------
@@ -1454,8 +1286,9 @@
         speed: cfg.speed,
         lane: cfg.lane
       }));
-      camera.lockedTarget = createCar('#ff5a3c', 'sedan', 'player');
-      camera.lockedTarget.position = new BABYLON.Vector3(localState.x, 0, localState.z);
+      localCar = createCar('#ff5a3c', 'sedan', 'player');
+      camera.lockedTarget = localCar;
+      localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
     }
 
     function startMultiplayerAsHost() {
@@ -1477,11 +1310,9 @@
         speed: cfg.speed,
         lane: cfg.lane
       }));
-      const localCar = createCar(playerColors[0], 'sedan', 'player');
+      localCar = createCar('#ff5a3c', 'sedan', 'player');
       camera.lockedTarget = localCar;
       localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
-      el.roomIdDisplay.textContent = localPlayerId ? localPlayerId.substring(0,4) : '...';
-      el.copyBtn.style.display = 'inline-block';
     }
 
     function startMultiplayerAsGuest() {
@@ -1497,14 +1328,13 @@
         lap: 1, lapStart: 0, raceClock: 0,
         bestLap: null, finished: false
       };
-      traffic = []; // guest doesn't run traffic
-      const localCar = createCar(playerColors[1], 'sedan', 'player');
+      traffic = [];
+      localCar = createCar('#3a86ff', 'sedan', 'player');
       camera.lockedTarget = localCar;
       localCar.position = new BABYLON.Vector3(localState.x, 0, localState.z);
     }
 
     function restartRace() {
-      // Reset local state
       if (localState) {
         localState.x = trackPath[0].x; localState.z = trackPath[0].z;
         localState.heading = startHeading; localState.speed = 0;
@@ -1514,15 +1344,11 @@
       }
       el.gameOverScreen.style.display = 'none';
       el.overlay.style.display = 'none';
-      started = true;
     }
 
-    // Button events
     el.startBtn.addEventListener('click', showMultiplayerMenu);
     el.soloBtn.addEventListener('click', startSolo);
-    el.createBtn.addEventListener('click', () => {
-      startMultiplayerAsHost();
-    });
+    el.createBtn.addEventListener('click', startMultiplayerAsHost);
     el.joinBtn.addEventListener('click', () => {
       const code = el.roomCodeInput.value.trim().toUpperCase();
       if (code && peer && !isHost) {
@@ -1547,25 +1373,22 @@
       updateSparks(dt);
       if (!started || !localState) return;
 
-      // Input processing
       const accel = isDown('w', 'arrowup');
       const brake = isDown('s', 'arrowdown');
       const left = isDown('a', 'arrowleft');
       const right = isDown('d', 'arrowright');
 
       if (multiplayerActive && !isHost) {
-        // Guest sends input to host
-        if (Date.now() - lastInputSendTime > 50) { // 20 Hz
+        if (Date.now() - lastInputSendTime > 50) {
           sendInputToHost();
           lastInputSendTime = Date.now();
         }
-        // Local prediction (simple)
+        // Local prediction (guest)
         simulateCar(localState, { accel, brake, left, right });
-        // Update local car mesh
-        camera.lockedTarget.position.set(localState.x, 0, localState.z);
-        camera.lockedTarget.rotation.y = localState.heading;
-        camera.lockedTarget.rotation.z = localState.roll;
-        // Update HUD
+        if (localCar) {
+          localCar.position.set(localState.x, 0, localState.z);
+          localCar.rotation.y = localState.heading;
+        }
         el.lapCount.textContent = localState.lap;
         el.lapTime.textContent = formatTime(localState.raceClock - localState.lapStart);
         el.bestTime.textContent = localState.bestLap === null ? '—' : formatTime(localState.bestLap);
@@ -1596,7 +1419,6 @@
       let rawSteer = 0;
       if (left) rawSteer -= 1;
       if (right) rawSteer += 1;
-
       if (rawSteer !== 0) {
         currentSteerValue += (rawSteer - currentSteerValue) * Math.min(1, STEER_RAMP_SPEED * dt);
       } else {
@@ -1612,7 +1434,6 @@
       localState.x += Math.sin(localState.heading) * localState.speed * dt;
       localState.z += Math.cos(localState.heading) * localState.speed * dt;
 
-      // Track collisions (grass/barrier)
       const nearest = nearestTrackIndex(localState.x, localState.z);
       const nearestPoint = trackPath[nearest.index];
       const perpHere = perpAt(nearest.index);
@@ -1628,7 +1449,6 @@
       }
       el.offTrack.classList.toggle('show', onGrass);
 
-      // Lap progression
       let indexDelta = nearest.index - localState.lastNearestIndex;
       if (indexDelta > N / 2) indexDelta -= N;
       if (indexDelta < -N / 2) indexDelta += N;
@@ -1643,22 +1463,15 @@
       }
       localState.lastNearestIndex = nearest.index;
 
-      // Update local car mesh
-      camera.lockedTarget.position.set(localState.x, 0, localState.z);
-      camera.lockedTarget.rotation.y = localState.heading;
-      camera.lockedTarget.rotation.z = steerInput * 0.12 * turnStrength;
-
-      // Traffic (host only)
-      if (traffic.length > 0) {
-        updateTraffic(dt);
+      if (localCar) {
+        localCar.position.set(localState.x, 0, localState.z);
+        localCar.rotation.y = localState.heading;
+        localCar.rotation.z = steerInput * 0.12 * turnStrength;
       }
 
-      // Broadcast state to guests
-      if (isHost && Object.keys(connections).length > 0) {
-        broadcastState();
-      }
+      if (traffic.length > 0) updateTraffic(dt);
+      if (isHost && Object.keys(connections).length > 0) broadcastState();
 
-      // HUD
       el.lapCount.textContent = localState.lap;
       el.lapTime.textContent = formatTime(localState.raceClock - localState.lapStart);
       el.bestTime.textContent = localState.bestLap === null ? '—' : formatTime(localState.bestLap);
@@ -1668,492 +1481,9 @@
         el.gameOverScreen.style.display = 'flex';
         el.overlay.style.display = 'flex';
       }
-=======
-    // ---------- LANDSCAPE LOCK ----------
-    function lockLandscape() {
-      if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock('landscape').catch(() => {});
-      }
-    }
-
-    // ---------- AUDIO ----------
-    let audioCtx = null, osc = null, gainNode = null, filterNode = null;
-    function initAudio() {
-      if (audioCtx) return;
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      osc = audioCtx.createOscillator();
-      osc.type = 'sawtooth';
-      filterNode = audioCtx.createBiquadFilter();
-      filterNode.type = 'lowpass';
-      filterNode.frequency.value = 700;
-      gainNode = audioCtx.createGain();
-      gainNode.gain.value = 0.05;
-      osc.connect(filterNode).connect(gainNode).connect(audioCtx.destination);
-      osc.start();
-      initMusic();
-    }
-    function updateAudio() {
-      if (!osc) return;
-      const targetFreq = 55 + Math.min(Math.abs(state.speed), MAX_SPEED) * 3.2;
-      osc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.06);
-    }
-
-    // ---------- MUSIC ----------
-    const BPM = 114;
-    const STEP_DUR = 60 / BPM / 4;
-    const STEPS_PER_BAR = 16;
-    const MUSIC_VOLUME = 0.5;
-    let musicBus = null, noiseBuffer = null;
-    let musicStep = 0, nextStepTime = 0, barCount = 0;
-    let musicMuted = false;
-
-    function buildNoiseBuffer() {
-      const size = audioCtx.sampleRate;
-      const buffer = audioCtx.createBuffer(1, size, audioCtx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
-      return buffer;
-    }
-
-    function initMusic() {
-      if (musicBus) return;
-      const compressor = audioCtx.createDynamicsCompressor();
-      compressor.connect(audioCtx.destination);
-      musicBus = audioCtx.createGain();
-      musicBus.gain.value = MUSIC_VOLUME;
-      musicBus.connect(compressor);
-      noiseBuffer = buildNoiseBuffer();
-      nextStepTime = audioCtx.currentTime + 0.1;
-      musicStep = 0;
-      barCount = 0;
-    }
-
-    function playKick(time) {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(150, time);
-      o.frequency.exponentialRampToValueAtTime(46, time + 0.12);
-      g.gain.setValueAtTime(0.9, time);
-      g.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
-      o.connect(g).connect(musicBus);
-      o.start(time); o.stop(time + 0.24);
-    }
-    function playRim(time) {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = 'square';
-      o.frequency.setValueAtTime(1500, time);
-      g.gain.setValueAtTime(0.32, time);
-      g.gain.exponentialRampToValueAtTime(0.001, time + 0.045);
-      o.connect(g).connect(musicBus);
-      o.start(time); o.stop(time + 0.06);
-    }
-    function playShaker(time, accent) {
-      const src = audioCtx.createBufferSource();
-      src.buffer = noiseBuffer;
-      const filt = audioCtx.createBiquadFilter();
-      filt.type = 'highpass';
-      filt.frequency.value = 6500;
-      const g = audioCtx.createGain();
-      g.gain.setValueAtTime(accent ? 0.16 : 0.08, time);
-      g.gain.exponentialRampToValueAtTime(0.001, time + 0.055);
-      src.connect(filt).connect(g).connect(musicBus);
-      src.start(time); src.stop(time + 0.06);
-    }
-    function playConga(time, freq) {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(freq, time);
-      o.frequency.exponentialRampToValueAtTime(freq * 0.7, time + 0.1);
-      g.gain.setValueAtTime(0.26, time);
-      g.gain.exponentialRampToValueAtTime(0.001, time + 0.13);
-      o.connect(g).connect(musicBus);
-      o.start(time); o.stop(time + 0.15);
-    }
-    function playBass(time, freq, dur) {
-      const o = audioCtx.createOscillator();
-      const filt = audioCtx.createBiquadFilter();
-      const g = audioCtx.createGain();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(freq, time);
-      filt.type = 'lowpass';
-      filt.frequency.value = 480;
-      g.gain.setValueAtTime(0.001, time);
-      g.gain.linearRampToValueAtTime(0.22, time + 0.015);
-      g.gain.exponentialRampToValueAtTime(0.001, time + dur);
-      o.connect(filt).connect(g).connect(musicBus);
-      o.start(time); o.stop(time + dur + 0.02);
-    }
-    function playHorn(time, freq) {
-      const o1 = audioCtx.createOscillator();
-      const o2 = audioCtx.createOscillator();
-      const filt = audioCtx.createBiquadFilter();
-      const g = audioCtx.createGain();
-      o1.type = 'sawtooth'; o1.frequency.value = freq;
-      o2.type = 'square'; o2.frequency.value = freq * 1.004;
-      filt.type = 'bandpass';
-      filt.frequency.value = freq * 2.1;
-      filt.Q.value = 1.1;
-      g.gain.setValueAtTime(0.001, time);
-      g.gain.linearRampToValueAtTime(0.24, time + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
-      o1.connect(filt); o2.connect(filt);
-      filt.connect(g).connect(musicBus);
-      o1.start(time); o2.start(time);
-      o1.stop(time + 0.32); o2.stop(time + 0.32);
-    }
-
-    const D2 = 73.42, F2 = 87.31, G2 = 98.0, A2 = 110.0, C3 = 130.81;
-    const F4 = 349.23, D4 = 293.66;
-    const KICK_STEPS = [0, 6, 10];
-    const RIM_STEPS = [3, 7, 11, 14];
-    const CONGA_STEPS = [[2, 220], [9, 260], [13, 240]];
-    const BASS_PATTERN = [
-      { step: 0, freq: D2, dur: 0.32 }, { step: 3, freq: F2, dur: 0.14 },
-      { step: 6, freq: D2, dur: 0.14 }, { step: 8, freq: G2, dur: 0.14 },
-      { step: 11, freq: A2, dur: 0.14 }, { step: 14, freq: C3, dur: 0.2 }
-    ];
-    const HORN_PATTERN = [{ step: 12, freq: F4 }, { step: 14, freq: D4 }];
-
-    function scheduleStep(step, time) {
-      if (KICK_STEPS.includes(step)) playKick(time);
-      if (RIM_STEPS.includes(step)) playRim(time);
-      playShaker(time, step % 4 === 0);
-      CONGA_STEPS.forEach(([s, freq]) => { if (s === step) playConga(time, freq); });
-      BASS_PATTERN.forEach((n) => { if (n.step === step) playBass(time, n.freq, n.dur); });
-      if (barCount % 2 === 1) {
-        HORN_PATTERN.forEach((n) => { if (n.step === step) playHorn(time, n.freq); });
-      }
-    }
-
-    function updateMusicScheduler() {
-      if (!audioCtx || !musicBus) return;
-      while (nextStepTime < audioCtx.currentTime + 0.12) {
-        scheduleStep(musicStep, nextStepTime);
-        nextStepTime += STEP_DUR;
-        musicStep++;
-        if (musicStep >= STEPS_PER_BAR) { musicStep = 0; barCount++; }
-      }
-    }
-
-    function toggleMute() {
-      musicMuted = !musicMuted;
-      if (el.muteBtn) el.muteBtn.textContent = musicMuted ? '\u{1F507}' : '\u{1F50A}';
-      if (musicBus && audioCtx) {
-        musicBus.gain.setTargetAtTime(musicMuted ? 0 : MUSIC_VOLUME, audioCtx.currentTime, 0.05);
-      }
-    }
-
-    // ---------- IMPACT EFFECTS (traffic bumps only) ----------
-    const sparkMat = new BABYLON.StandardMaterial('sparkMat', scene);
-    sparkMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
-    sparkMat.emissiveColor = new BABYLON.Color3(1, 0.75, 0.2);
-    sparkMat.specularColor = new BABYLON.Color3(0, 0, 0);
-    let activeSparks = [];
-
-    function spawnImpactSparks(x, y, z) {
-      const count = 10;
-      for (let i = 0; i < count; i++) {
-        const spark = BABYLON.MeshBuilder.CreateBox('spark', { size: 0.1 + Math.random() * 0.08 }, scene);
-        spark.material = sparkMat;
-        spark.position.set(x, y, z);
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 3.5 + Math.random() * 3;
-        activeSparks.push({
-          mesh: spark,
-          vx: Math.cos(angle) * speed,
-          vy: 2.5 + Math.random() * 2.5,
-          vz: Math.sin(angle) * speed,
-          life: 0,
-          maxLife: 0.3 + Math.random() * 0.2
-        });
-      }
-    }
-
-    function updateSparks(dt) {
-      for (let i = activeSparks.length - 1; i >= 0; i--) {
-        const s = activeSparks[i];
-        s.life += dt;
-        if (s.life >= s.maxLife) {
-          s.mesh.dispose();
-          activeSparks.splice(i, 1);
-          continue;
-        }
-        s.vy -= 9 * dt;
-        s.mesh.position.x += s.vx * dt;
-        s.mesh.position.y += s.vy * dt;
-        s.mesh.position.z += s.vz * dt;
-        const scale = Math.max(0.05, 1 - s.life / s.maxLife);
-        s.mesh.scaling.set(scale, scale, scale);
-      }
-    }
-
-    function flashImpactScreen() {
-      if (!el.impactFlash) return;
-      el.impactFlash.style.transition = 'none';
-      el.impactFlash.style.opacity = '1';
-      requestAnimationFrame(() => {
-        el.impactFlash.style.transition = 'opacity 0.35s ease-out';
-        el.impactFlash.style.opacity = '0';
-      });
-    }
-
-    function playImpactThud() {
-      if (!audioCtx) return;
-      const t = audioCtx.currentTime;
-      const thump = audioCtx.createOscillator();
-      const thumpGain = audioCtx.createGain();
-      thump.type = 'sine';
-      thump.frequency.setValueAtTime(120, t);
-      thump.frequency.exponentialRampToValueAtTime(35, t + 0.18);
-      thumpGain.gain.setValueAtTime(0.55, t);
-      thumpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-      thump.connect(thumpGain).connect(audioCtx.destination);
-      thump.start(t); thump.stop(t + 0.32);
-
-      if (noiseBuffer) {
-        const crash = audioCtx.createBufferSource();
-        crash.buffer = noiseBuffer;
-        const crashFilter = audioCtx.createBiquadFilter();
-        crashFilter.type = 'bandpass';
-        crashFilter.frequency.value = 900;
-        crashFilter.Q.value = 0.7;
-        const crashGain = audioCtx.createGain();
-        crashGain.gain.setValueAtTime(0.4, t);
-        crashGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-        crash.connect(crashFilter).connect(crashGain).connect(audioCtx.destination);
-        crash.start(t); crash.stop(t + 0.24);
-      }
-    }
-
-    let lastImpactEffectTime = -999;
-    function triggerImpactEffect(x, y, z) {
-      if (state.raceClock - lastImpactEffectTime < 0.5) return;
-      lastImpactEffectTime = state.raceClock;
-      spawnImpactSparks(x, y, z);
-      flashImpactScreen();
-      playImpactThud();
-    }
-
-    // ---------- NEAREST TRACK POINT ----------
-    function nearestTrackIndex(x, z) {
-      let best = Infinity, bestI = 0;
-      for (let i = 0; i < N; i++) {
-        const dx = trackPath[i].x - x, dz = trackPath[i].z - z;
-        const d = dx * dx + dz * dz;
-        if (d < best) { best = d; bestI = i; }
-      }
-      return { index: bestI, dist: Math.sqrt(best) };
-    }
-
-    // ---------- HUD ----------
-    const el = {
-      overlay: document.getElementById('overlay'),
-      startScreen: document.getElementById('startScreen'),
-      gameOverScreen: document.getElementById('gameOverScreen'),
-      startBtn: document.getElementById('startBtn'),
-      restartBtn: document.getElementById('restartBtn'),
-      lapCount: document.getElementById('lapCount'),
-      lapTime: document.getElementById('lapTime'),
-      bestTime: document.getElementById('bestTime'),
-      finalBest: document.getElementById('finalBest'),
-      speedValue: document.getElementById('speedValue'),
-      offTrack: document.getElementById('offTrack'),
-      muteBtn: document.getElementById('muteBtn'),
-      btnLeft: document.getElementById('btnLeft'),
-      btnRight: document.getElementById('btnRight'),
-      btnAccel: document.getElementById('btnAccel'),
-      btnBrake: document.getElementById('btnBrake'),
-      rotateHint: document.getElementById('rotateHint'),
-      rotateContinueBtn: document.getElementById('rotateContinueBtn'),
-      impactFlash: document.getElementById('impactFlash')
-    };
-    document.getElementById('lapTotal').textContent = TOTAL_LAPS;
-    el.muteBtn.addEventListener('click', toggleMute);
-    el.rotateContinueBtn.addEventListener('click', () => { el.rotateHint.style.display = 'none'; });
-
-    bindTouchButton(el.btnAccel, ['w', 'arrowup']);
-    bindTouchButton(el.btnBrake, ['s', 'arrowdown']);
-    bindTouchButton(el.btnLeft, ['a', 'arrowleft']);
-    bindTouchButton(el.btnRight, ['d', 'arrowright']);
-
-    function formatTime(sec) {
-      const m = Math.floor(sec / 60);
-      const s = sec - m * 60;
-      return m + ':' + s.toFixed(2).padStart(5, '0');
-    }
-
-    let started = false;
-    const isMobile = window.matchMedia('(pointer: coarse)').matches;
-
-    function startRace() {
-      if (!started) {
-        started = true;
-        initAudio();
-        el.overlay.style.display = 'none';
-        if (isMobile) {
-          lockLandscape();
-        }
-      }
-    }
-    el.startBtn.addEventListener('click', startRace);
-    el.restartBtn.addEventListener('click', restartRace);
-
-    function restartRace() {
-      state.x = trackPath[0].x; state.z = trackPath[0].z;
-      state.heading = startHeading; state.speed = 0; state.roll = 0;
-      state.lastNearestIndex = 0; state.progress = 0;
-      state.lap = 1; state.lapStart = state.raceClock; state.finished = false;
-      el.gameOverScreen.style.display = 'none';
-      el.overlay.style.display = 'none';
-      started = true;
-    }
-
-    // ---------- MAIN UPDATE ----------
-    // Add slight steering smoothing for touch (instant on keyboard is fine,
-    // but on mobile a tiny ramp avoids jerky direction changes)
-    let currentSteerValue = 0;
-    const STEER_RAMP_SPEED = 8.0; // how fast the smoothed steering approaches raw input
-
-    function update(dt) {
-      updateTraffic(dt);
-      updateMusicScheduler();
-      updateSparks(dt);
-      if (!started || state.finished) return;
-      state.raceClock += dt;
-
-      const accel = isDown('w', 'arrowup');
-      const brake = isDown('s', 'arrowdown');
-      const left = isDown('a', 'arrowleft');
-      const right = isDown('d', 'arrowright');
-
-      if (accel) state.speed += ACCEL_RATE * dt;
-      if (brake) state.speed -= BRAKE_RATE * dt;
-      state.speed -= state.speed * DRAG * dt;
-      state.speed = Math.max(MAX_REVERSE, Math.min(MAX_SPEED, state.speed));
-
-      const absSpeed = Math.abs(state.speed);
-      const rampUp = Math.min(1, absSpeed / TURN_LOW_SPEED_RAMP);
-      const highSpeedEase = TURN_MIN_STRENGTH + (1 - TURN_MIN_STRENGTH) /
-        (1 + Math.max(0, absSpeed - TURN_LOW_SPEED_RAMP) / TURN_HIGH_SPEED_SOFTEN);
-      const turnStrength = rampUp * highSpeedEase;
-      const speedFactor = Math.sign(state.speed || 1) * turnStrength;
-
-      // Raw digital input
-      let rawSteer = 0;
-      if (left) rawSteer -= 1;
-      if (right) rawSteer += 1;
-
-      // Smooth towards target
-      if (rawSteer !== 0) {
-        currentSteerValue += (rawSteer - currentSteerValue) * Math.min(1, STEER_RAMP_SPEED * dt);
-      } else {
-        // Quickly return to zero when no input
-        currentSteerValue += (0 - currentSteerValue) * Math.min(1, STEER_RAMP_SPEED * 2 * dt);
-      }
-      const steerInput = Math.max(-1, Math.min(1, currentSteerValue));
-
-      state.heading += TURN_RATE * speedFactor * steerInput * dt;
-      if (steerInput !== 0) {
-        state.speed -= Math.sign(state.speed || 1) * CORNER_SCRUB * turnStrength * Math.abs(steerInput) * dt;
-      }
-
-      state.x += Math.sin(state.heading) * state.speed * dt;
-      state.z += Math.cos(state.heading) * state.speed * dt;
-
-      const nearest = nearestTrackIndex(state.x, state.z);
-      const nearestPoint = trackPath[nearest.index];
-      const perpHere = perpAt(nearest.index);
-      const lateral = (state.x - nearestPoint.x) * perpHere.x + (state.z - nearestPoint.z) * perpHere.z;
-      const onGrass = Math.abs(lateral) > ROAD_HALF_WIDTH;
-      const farOutside = Math.abs(lateral) > GRASS_LIMIT;
-
-      if (onGrass) {
-        state.speed -= Math.sign(state.speed || 1) * GRASS_DRAG * dt;
-      }
-
-      if (farOutside) {
-        const targetLateral = Math.sign(lateral) * (GRASS_LIMIT - 0.3);
-        const correction = targetLateral - lateral;
-        state.x += perpHere.x * correction;
-        state.z += perpHere.z * correction;
-      }
-
-      el.offTrack.classList.toggle('show', onGrass);
-
-      let indexDelta = nearest.index - state.lastNearestIndex;
-      if (indexDelta > N / 2) indexDelta -= N;
-      if (indexDelta < -N / 2) indexDelta += N;
-      state.progress = Math.max(0, state.progress + indexDelta);
-
-      if (state.progress >= N) {
-        state.progress -= N;
-        const lapTime = state.raceClock - state.lapStart;
-        if (state.bestLap === null || lapTime < state.bestLap) state.bestLap = lapTime;
-        state.lapStart = state.raceClock;
-        if (state.lap >= TOTAL_LAPS) {
-          state.finished = true;
-          el.finalBest.textContent = formatTime(state.bestLap);
-          el.startScreen.style.display = 'none';
-          el.gameOverScreen.style.display = 'flex';
-          el.overlay.style.display = 'flex';
-        } else {
-          state.lap += 1;
-        }
-      }
-      state.lastNearestIndex = nearest.index;
-
-      car.position.set(state.x, 0, state.z);
-      car.rotation.y = state.heading;
-      const targetRoll = steerInput * 0.12 * turnStrength;
-      state.roll += (targetRoll - state.roll) * 0.12;
-      car.rotation.z = state.roll;
-
-      el.lapCount.textContent = state.lap;
-      el.lapTime.textContent = formatTime(state.raceClock - state.lapStart);
-      el.bestTime.textContent = state.bestLap === null ? '—' : formatTime(state.bestLap);
-      el.speedValue.textContent = Math.round(Math.abs(state.speed) * 3.6);
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
-
       updateAudio();
     }
 
-<<<<<<< HEAD
-    function updateTraffic(dt) {
-      traffic.forEach((tc) => {
-        tc.floatIdx += (tc.speed * dt) / avgSegLen;
-        if (tc.floatIdx >= N) tc.floatIdx -= N;
-        const i0 = Math.floor(tc.floatIdx) % N;
-        const i1 = (i0 + 1) % N;
-        const frac = tc.floatIdx - Math.floor(tc.floatIdx);
-        const p0 = trackPath[i0], p1 = trackPath[i1];
-        const perp = perpAt(i0);
-        const cx = p0.x + (p1.x - p0.x) * frac + perp.x * tc.lane;
-        const cz = p0.z + (p1.z - p0.z) * frac + perp.z * tc.lane;
-        const tangent = tangentAt(i0);
-        tc.root.position.set(cx, 0, cz);
-        tc.root.rotation.y = Math.atan2(tangent.x, tangent.z);
-
-        // Collision with local player
-        const dx = localState.x - cx, dz = localState.z - cz;
-        const distSq = dx * dx + dz * dz;
-        const minDist = 2.5;
-        if (distSq < minDist * minDist && distSq > 0.0001) {
-          const dist = Math.sqrt(distSq);
-          const overlap = minDist - dist;
-          localState.x += (dx / dist) * overlap;
-          localState.z += (dz / dist) * overlap;
-          localState.speed *= 0.82;
-          if (Math.abs(localState.speed) > 2.5) triggerImpactEffect(localState.x, 0.5, localState.z);
-        }
-      });
-    }
-
-=======
->>>>>>> 3dea1aac22ff12b1468741b561770789a90da375
     // ---------- RENDER LOOP ----------
     engine.runRenderLoop(() => {
       const dt = Math.min(engine.getDeltaTime() / 1000, 0.1);
@@ -2162,7 +1492,6 @@
     });
     window.addEventListener('resize', () => engine.resize());
     window.addEventListener('orientationchange', () => setTimeout(() => engine.resize(), 250));
-
   })();
   </script>
 </body>
