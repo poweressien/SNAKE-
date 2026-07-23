@@ -506,16 +506,15 @@ function updateLobbyList(){
 
 function setupDataChannel(conn){
   conn.on('open',()=>{
-    const colorIdx=(Object.keys(connections).length+1)%PLAYER_COLORS.length;
-    const color=PLAYER_COLORS[colorIdx];
-    const remoteCar=createCar(color,'sedan','remote_'+conn.peer);
-    const labelPlane=createNameLabel('',remoteCar);
-    connections[conn.peer]={dc:conn,car:remoteCar,state:{x:trackPath[0].x,z:trackPath[0].z,heading:startHeading,speed:0,roll:0,lastNearestIndex:0,progress:0,lap:1,lapStart:0,raceClock:0,bestLap:null,finished:false},label:labelPlane,name:'',color:color};
-    const playersInfo={};playersInfo[localPlayerId]={name:localName,color:localColor};
-    for(const[id,c]of Object.entries(connections)){playersInfo[id]={name:c.name,color:c.color};}
-    conn.send({type:'welcome',color:color,players:playersInfo});
-    updateLobbyList();
-    broadcastState();
+    if(isHost){
+      const colorIdx=(Object.keys(connections).length+1)%PLAYER_COLORS.length;
+      const color=PLAYER_COLORS[colorIdx];
+      const remoteCar=createCar(color,'sedan','remote_'+conn.peer);
+      const labelPlane=createNameLabel('',remoteCar);
+      connections[conn.peer]={dc:conn,car:remoteCar,state:{x:trackPath[0].x,z:trackPath[0].z,heading:startHeading,speed:0,roll:0,lastNearestIndex:0,progress:0,lap:1,lapStart:0,raceClock:0,bestLap:null,finished:false},label:labelPlane,name:'',color:color};
+    }else{
+      conn.send({type:'join',name:localName});
+    }
   });
   conn.on('data',(data)=>{handleData(conn.peer,data);});
   conn.on('error',(err)=>{clearTimeout(joinTimeoutHandle);setStatus('Connection error: '+(err&&err.message?err.message:'lost connection'));});
@@ -527,7 +526,8 @@ function setupDataChannel(conn){
 
 function handleData(senderId,data){
   if(isHost){
-    if(data.type==='input'){const remote=connections[senderId];if(!remote||!remote.state||remote.state.finished)return;if(data.name&&!remote.name){remote.name=data.name;updateNameLabel(remote.label,data.name);updateLobbyList();broadcastState();}const now=Date.now();const stepDt=remote.lastInputTime?Math.min((now-remote.lastInputTime)/1000,0.1):1/60;remote.lastInputTime=now;simulateCar(remote.state,data,stepDt);}
+    if(data.type==='join'){const remote=connections[senderId];if(!remote)return;remote.name=data.name||'';updateNameLabel(remote.label,remote.name);updateLobbyList();const playersInfo={};playersInfo[localPlayerId]={name:localName,color:localColor};for(const[id,c]of Object.entries(connections)){playersInfo[id]={name:c.name,color:c.color};}if(remote.dc&&remote.dc.open)remote.dc.send({type:'welcome',color:remote.color,players:playersInfo});broadcastState();}
+    else if(data.type==='input'){const remote=connections[senderId];if(!remote||!remote.state||remote.state.finished)return;const now=Date.now();const stepDt=remote.lastInputTime?Math.min((now-remote.lastInputTime)/1000,0.1):1/60;remote.lastInputTime=now;simulateCar(remote.state,data,stepDt);}
   }else{
     if(data.type==='state'){updateRemoteStates(data.players,data.colors);}
     else if(data.type==='start'){setupMultiplayerGame(data.x,data.z);startCountdown();}
@@ -566,9 +566,9 @@ function updateNameLabel(labelPlane,name){
 function broadcastState(){
   if(!isHost||!peer)return;
   const players={},colors={};
-  players[localPlayerId]={x:localState.x,z:localState.z,heading:localState.heading,speed:localState.speed,roll:localState.roll,lap:localState.lap,lapStart:localState.lapStart,bestLap:localState.bestLap,finished:localState.finished};
+  players[localPlayerId]=localState?{x:localState.x,z:localState.z,heading:localState.heading,speed:localState.speed,roll:localState.roll,lap:localState.lap,lapStart:localState.lapStart,bestLap:localState.bestLap,finished:localState.finished,name:localName}:{x:trackPath[0].x,z:trackPath[0].z,heading:startHeading,speed:0,roll:0,lap:1,lapStart:0,bestLap:null,finished:false,name:localName};
   colors[localPlayerId]=localColor;
-  for(const[id,conn]of Object.entries(connections)){if(conn.state){players[id]={x:conn.state.x,z:conn.state.z,heading:conn.state.heading,speed:conn.state.speed,roll:conn.state.roll,lap:conn.state.lap,lapStart:conn.state.lapStart,bestLap:conn.state.bestLap,finished:conn.state.finished};colors[id]=conn.color;}}
+  for(const[id,conn]of Object.entries(connections)){if(conn.state){players[id]={x:conn.state.x,z:conn.state.z,heading:conn.state.heading,speed:conn.state.speed,roll:conn.state.roll,lap:conn.state.lap,lapStart:conn.state.lapStart,bestLap:conn.state.bestLap,finished:conn.state.finished,name:conn.name};colors[id]=conn.color;}}
   const msg={type:'state',players,colors};
   for(const conn of Object.values(connections)){if(conn.dc&&conn.dc.open)conn.dc.send(msg);}
 }
@@ -576,10 +576,11 @@ function broadcastState(){
 function updateRemoteStates(players,colors){
   for(const[id,data]of Object.entries(players)){
     if(id===localPlayerId)continue;
-    if(!connections[id]){const color=colors[id]||PLAYER_COLORS[Object.keys(connections).length%PLAYER_COLORS.length];const car=createCar(color,'sedan','remote_'+id);const label=createNameLabel('',car);connections[id]={dc:null,car,state:null,label,name:'',color};}
+    if(!connections[id]){const color=colors[id]||PLAYER_COLORS[Object.keys(connections).length%PLAYER_COLORS.length];const car=createCar(color,'sedan','remote_'+id);const label=createNameLabel(data.name||'',car);connections[id]={dc:null,car,state:null,label,name:data.name||'',color};}
     const remote=connections[id];if(remote.car){remote.car.position.set(data.x,0,data.z);remote.car.rotation.y=data.heading;remote.car.rotation.z=data.roll;}
     if(remote.state)Object.assign(remote.state,data);
     if(colors&&colors[id]&&!remote.color)remote.color=colors[id];
+    if(data.name&&remote.name!==data.name){remote.name=data.name;updateNameLabel(remote.label,data.name);}
   }
 }
 
