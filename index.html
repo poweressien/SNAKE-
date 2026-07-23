@@ -527,7 +527,7 @@ function setupDataChannel(conn){
 function handleData(senderId,data){
   if(isHost){
     if(data.type==='join'){const remote=connections[senderId];if(!remote)return;remote.name=data.name||'';updateNameLabel(remote.label,remote.name);updateLobbyList();const playersInfo={};playersInfo[localPlayerId]={name:localName,color:localColor};for(const[id,c]of Object.entries(connections)){playersInfo[id]={name:c.name,color:c.color};}if(remote.dc&&remote.dc.open)remote.dc.send({type:'welcome',color:remote.color,players:playersInfo});broadcastState();}
-    else if(data.type==='input'){const remote=connections[senderId];if(!remote||!remote.state||remote.state.finished)return;const now=Date.now();const stepDt=remote.lastInputTime?Math.min((now-remote.lastInputTime)/1000,0.1):1/60;remote.lastInputTime=now;simulateCar(remote.state,data,stepDt);}
+    else if(data.type==='input'){const remote=connections[senderId];if(!remote||!remote.state||remote.state.finished)return;const now=Date.now();const stepDt=remote.lastInputTime?Math.min((now-remote.lastInputTime)/1000,0.1):1/60;remote.lastInputTime=now;simulateCar(remote.state,data,stepDt);if(remote.car){remote.car.position.set(remote.state.x,0,remote.state.z);remote.car.rotation.y=remote.state.heading;remote.car.rotation.z=remote.state.roll;}}
   }else{
     if(data.type==='state'){updateRemoteStates(data.players,data.colors);}
     else if(data.type==='start'){setupMultiplayerGame(data.x,data.z);startCountdown();}
@@ -595,7 +595,7 @@ function simulateCar(st,input,dt){
   if(input.accel)st.speed+=ACCEL_RATE*dt;if(input.brake)st.speed-=BRAKE_RATE*dt;st.speed-=st.speed*DRAG*dt;st.speed=Math.max(MAX_REVERSE,Math.min(MAX_SPEED,st.speed));
   const absSpeed=Math.abs(st.speed);const rampUp=Math.min(1,absSpeed/TURN_LOW_SPEED_RAMP);const highSpeedEase=TURN_MIN_STRENGTH+(1-TURN_MIN_STRENGTH)/(1+Math.max(0,absSpeed-TURN_LOW_SPEED_RAMP)/TURN_HIGH_SPEED_SOFTEN);const turnStrength=rampUp*highSpeedEase;const speedFactor=Math.sign(st.speed||1)*turnStrength;
   let steerInput=0;if(input.left)steerInput-=1;if(input.right)steerInput+=1;
-  st.heading+=TURN_RATE*speedFactor*steerInput*dt;st.x+=Math.sin(st.heading)*st.speed*dt;st.z+=Math.cos(st.heading)*st.speed*dt;
+  st.heading+=TURN_RATE*speedFactor*steerInput*dt;st.roll=steerInput*0.12*turnStrength;st.x+=Math.sin(st.heading)*st.speed*dt;st.z+=Math.cos(st.heading)*st.speed*dt;
   const nearest=nearestTrackIndex(st.x,st.z);const perpHere=perpAt(nearest.index);const lateral=(st.x-trackPath[nearest.index].x)*perpHere.x+(st.z-trackPath[nearest.index].z)*perpHere.z;
   if(Math.abs(lateral)>GRASS_LIMIT)st.speed*=0.9;
   let indexDelta=nearest.index-st.lastNearestIndex;if(indexDelta>N/2)indexDelta-=N;if(indexDelta<-N/2)indexDelta+=N;st.progress=Math.max(0,st.progress+indexDelta);
@@ -646,7 +646,7 @@ function setupMultiplayerGame(startX,startZ){
   traffic=[];
   if(isHost){
     const allPlayers=[localPlayerId,...Object.keys(connections)];const total=allPlayers.length;
-    allPlayers.forEach((id,idx)=>{const pos=getStartPosition(idx,total);if(id===localPlayerId){localState.x=pos.x;localState.z=pos.z;}else{if(connections[id]&&connections[id].state){connections[id].state.x=pos.x;connections[id].state.z=pos.z;}}});
+    allPlayers.forEach((id,idx)=>{const pos=getStartPosition(idx,total);if(id===localPlayerId){localState.x=pos.x;localState.z=pos.z;}else{if(connections[id]&&connections[id].state){connections[id].state.x=pos.x;connections[id].state.z=pos.z;if(connections[id].car){connections[id].car.position.set(pos.x,0,pos.z);connections[id].car.rotation.y=startHeading;}}}});
   }
   if(!localCar){localCar=createCar(localColor,'sedan','player');createNameLabel(localName,localCar);camera.lockedTarget=localCar;}
   localCar.position.set(localState.x,0,localState.z);
