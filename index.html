@@ -168,8 +168,8 @@ const skyColor=new BABYLON.Color3(0.53,0.72,0.86);
 scene.clearColor=new BABYLON.Color4(skyColor.r,skyColor.g,skyColor.b,1);
 scene.fogMode=BABYLON.Scene.FOGMODE_LINEAR;
 scene.fogColor=skyColor;
-scene.fogStart=110;
-scene.fogEnd=320;
+scene.fogStart=280;
+scene.fogEnd=750;
 
 const hemi=new BABYLON.HemisphericLight('hemi',new BABYLON.Vector3(0,1,0),scene);
 hemi.intensity=0.78;
