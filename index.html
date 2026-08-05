@@ -190,6 +190,10 @@
     padding: 10px; border-radius: 4px;
   }
   .mpInput:focus { outline: none; border-color: var(--amber); }
+  .mpNameInput {
+    width: 200px; text-transform: none; letter-spacing: 0.02em; font-size: 14px;
+    font-weight: 500; font-family: 'Space Grotesk', sans-serif; margin-bottom: 16px;
+  }
   .mpStatus { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--text-dim); min-height: 16px; text-align: center; }
   #mpHud { display: none; top: 18px; left: 50%; transform: translateX(-50%); text-align: center; }
   #mpHud .lap-value { font-size: 14px; }
@@ -270,6 +274,7 @@
 
       <div class="mpDivider">or race a friend</div>
       <div id="mpPanel">
+        <input id="mpNameInput" class="mpInput mpNameInput" type="text" maxlength="14" placeholder="YOUR NAME" autocomplete="off" spellcheck="false">
         <div class="mpTabs">
           <button id="mpHostTab" class="mpTab active">Host</button>
           <button id="mpJoinTab" class="mpTab">Join</button>
@@ -698,6 +703,7 @@
     }));
 
     function updateTraffic(dt) {
+      if (isMultiplayer) return; // AI traffic has no place once a real opponent is on track
       traffic.forEach((tc) => {
         tc.floatIdx += (tc.speed * dt) / avgSegLen;
         if (tc.floatIdx >= N) tc.floatIdx -= N;
@@ -1201,6 +1207,67 @@
     const remoteState = { x: 0, z: 0, heading: 0, roll: 0, lap: 1, active: false };
     const remoteRender = { x: 0, z: 0, heading: 0, roll: 0 };
 
+    const NAME_TAG_TEX_W = 256, NAME_TAG_TEX_H = 64;
+    const NAME_TAG_HEIGHT = 1.7; // world-space clearance above a sedan roof
+    let localPlayerName = 'Racer';
+    let localNameTag = null;
+    let remoteNameTag = null;
+
+    function mpCaptureName() {
+      const typed = (el.mpNameInput.value || '').trim();
+      localPlayerName = typed ? typed.slice(0, 14) : ('Racer' + Math.floor(10 + Math.random() * 90));
+    }
+
+    // Floating billboard label — a small plane with a hand-drawn canvas
+    // texture, always facing the camera, positioned above a car each frame.
+    function createNameTag(uid) {
+      const dynTex = new BABYLON.DynamicTexture('nameTagTex_' + uid, { width: NAME_TAG_TEX_W, height: NAME_TAG_TEX_H }, scene, true);
+      dynTex.hasAlpha = true;
+      const plane = BABYLON.MeshBuilder.CreatePlane('nameTag_' + uid, { width: 2.4, height: 0.6 }, scene);
+      const mat = new BABYLON.StandardMaterial('nameTagMat_' + uid, scene);
+      mat.diffuseTexture = dynTex;
+      mat.useAlphaFromDiffuseTexture = true;
+      mat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+      mat.disableLighting = true;
+      mat.specularColor = new BABYLON.Color3(0, 0, 0);
+      mat.backFaceCulling = false;
+      plane.material = mat;
+      plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+      plane.isPickable = false;
+      plane._nameTagTex = dynTex;
+      plane._nameTagText = '';
+      plane.setEnabled(false);
+      return plane;
+    }
+
+    function setNameTagText(plane, text) {
+      const safeText = (text || 'Racer').slice(0, 14);
+      if (plane._nameTagText === safeText) return; // already showing this — skip the redraw
+      plane._nameTagText = safeText;
+      const ctx = plane._nameTagTex.getContext();
+      ctx.clearRect(0, 0, NAME_TAG_TEX_W, NAME_TAG_TEX_H);
+      ctx.fillStyle = 'rgba(12,14,20,0.6)';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(4, 12, NAME_TAG_TEX_W - 8, NAME_TAG_TEX_H - 24, 10);
+        ctx.fill();
+      } else {
+        ctx.fillRect(4, 12, NAME_TAG_TEX_W - 8, NAME_TAG_TEX_H - 24);
+      }
+      ctx.font = 'bold 26px "Space Grotesk", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffb627';
+      ctx.fillText(safeText, NAME_TAG_TEX_W / 2, NAME_TAG_TEX_H / 2 + 1);
+      plane._nameTagTex.update();
+      plane.setEnabled(true);
+    }
+
+    function ensureNameTags() {
+      if (!localNameTag) localNameTag = createNameTag('local');
+      if (!remoteNameTag) remoteNameTag = createNameTag('remote');
+    }
+
     function mpRandomCode() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // skip 0/O/1/I to avoid ambiguity
       let s = '';
@@ -1227,11 +1294,14 @@
     function mpAttachConnection(conn) {
       netConn = conn;
       isMultiplayer = true;
+      traffic.forEach((tc) => tc.root.setEnabled(false)); // no AI clutter once a real opponent is racing
       ensureRemoteCar();
       remoteCar.setEnabled(true);
       remoteState.active = false;
       remoteRender.x = state.x; remoteRender.z = state.z;
       remoteRender.heading = state.heading; remoteRender.roll = 0;
+      ensureNameTags();
+      setNameTagText(localNameTag, localPlayerName);
       el.mpHud.style.display = 'flex';
       el.mpHudText.textContent = 'Connected — racing live';
       el.mpOpponentLap.textContent = '';
@@ -1245,6 +1315,7 @@
         remoteState.lap = data.lap;
         remoteState.active = true;
         remoteLastPacket = performance.now();
+        if (data.name && remoteNameTag) setNameTagText(remoteNameTag, data.name);
       });
       conn.on('close', mpHandleDisconnect);
       conn.on('error', mpHandleDisconnect);
@@ -1308,7 +1379,7 @@
       mpSendAccum += dt;
       if (mpSendAccum < MP_SEND_INTERVAL) return;
       mpSendAccum = 0;
-      netConn.send({ x: state.x, z: state.z, heading: state.heading, roll: state.roll, lap: state.lap });
+      netConn.send({ x: state.x, z: state.z, heading: state.heading, roll: state.roll, lap: state.lap, name: localPlayerName });
     }
 
     // Symmetric rendering side: smooth the last received packet toward the
@@ -1331,6 +1402,7 @@
       remoteCar.position.set(remoteRender.x, 0, remoteRender.z);
       remoteCar.rotation.y = remoteRender.heading;
       remoteCar.rotation.z = remoteRender.roll;
+      if (remoteNameTag) remoteNameTag.position.set(remoteRender.x, NAME_TAG_HEIGHT, remoteRender.z);
       if (el.mpOpponentLap) el.mpOpponentLap.textContent = 'Opponent — Lap ' + remoteState.lap;
     }
 
@@ -1369,7 +1441,8 @@
       mpJoinBtn: document.getElementById('mpJoinBtn'),
       mpCodeInput: document.getElementById('mpCodeInput'),
       mpHostStatus: document.getElementById('mpHostStatus'),
-      mpJoinStatus: document.getElementById('mpJoinStatus')
+      mpJoinStatus: document.getElementById('mpJoinStatus'),
+      mpNameInput: document.getElementById('mpNameInput')
     };
     document.getElementById('lapTotal').textContent = TOTAL_LAPS;
     el.muteBtn.addEventListener('click', toggleMute);
@@ -1396,17 +1469,20 @@
       el.mpJoinTab.classList.add('active'); el.mpHostTab.classList.remove('active');
       el.mpJoinView.style.display = 'flex'; el.mpHostView.style.display = 'none';
     });
-    el.mpHostBtn.addEventListener('click', () => { initAudio(); mpHostRace(); });
-    el.mpJoinBtn.addEventListener('click', () => { initAudio(); mpJoinRace(el.mpCodeInput.value); });
+    el.mpHostBtn.addEventListener('click', () => { initAudio(); mpCaptureName(); mpHostRace(); });
+    el.mpJoinBtn.addEventListener('click', () => { initAudio(); mpCaptureName(); mpJoinRace(el.mpCodeInput.value); });
     el.mpCodeInput.addEventListener('input', () => {
       el.mpCodeInput.value = el.mpCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
     });
     // Stop game hotkeys (R, WASD) from firing while typing a room code.
     el.mpCodeInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key === 'Enter') { initAudio(); mpJoinRace(el.mpCodeInput.value); }
+      if (e.key === 'Enter') { initAudio(); mpCaptureName(); mpJoinRace(el.mpCodeInput.value); }
     });
     el.mpCodeInput.addEventListener('keyup', (e) => { e.stopPropagation(); });
+    // Same protection for the name field.
+    el.mpNameInput.addEventListener('keydown', (e) => { e.stopPropagation(); });
+    el.mpNameInput.addEventListener('keyup', (e) => { e.stopPropagation(); });
 
     function formatTime(sec) {
       const m = Math.floor(sec / 60);
@@ -1516,6 +1592,7 @@
       const targetRoll = steerInput * 0.12 * turnStrength;
       state.roll += (targetRoll - state.roll) * 0.12;
       car.rotation.z = state.roll;
+      if (localNameTag) localNameTag.position.set(state.x, NAME_TAG_HEIGHT, state.z);
 
       // Wraparound-safe progress: accumulate the signed step in nearest-track-index
       // each frame (correcting for the array seam at index 0/N-1) instead of testing
