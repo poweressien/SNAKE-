@@ -1267,6 +1267,7 @@
     let netConn = null;
     let isMultiplayer = false;
     let isHost = false;
+    let mpConnecting = false; // true while a Host/Join attempt is in flight
     let mpSendAccum = 0;
     let remoteCar = null;
     let remoteLastPacket = 0;
@@ -1387,8 +1388,15 @@
       el.mpHudText.textContent = 'Connected — racing live';
       el.mpOpponentLap.textContent = '';
 
+      // Every handler below re-checks conn === netConn before acting on
+      // anything. Without that check, a leftover connection object from an
+      // earlier attempt — a double-click on Create Room, a retry after a
+      // slow join — can fire close/error/data AFTER a newer, healthy
+      // connection has already taken over, and silently corrupt its state.
+      // That mismatch is exactly how one screen ends up saying
+      // "disconnected" while the other still thinks it's live.
       conn.on('data', (data) => {
-        if (!data) return;
+        if (conn !== netConn || !data) return;
         if (data.type === 'track') {
           if (!isHost) mpApplyRemoteTrack(data.trackIndex);
           return;
@@ -1403,17 +1411,22 @@
         remoteLastPacket = performance.now();
         if (data.name && remoteNameTag) setNameTagText(remoteNameTag, data.name);
       });
-      conn.on('close', mpHandleDisconnect);
-      conn.on('error', mpHandleDisconnect);
+      conn.on('close', () => { if (conn === netConn) mpHandleDisconnect(); });
+      conn.on('error', () => { if (conn === netConn) mpHandleDisconnect(); });
 
-      if (isHost) {
-        // Host's track choice is authoritative — send it now, plus one
-        // backup resend shortly after in case this first send raced ahead
-        // of the guest's data listener being ready.
+      const sendTrackChoice = () => {
+        if (conn !== netConn || !conn.open) return;
         conn.send({ type: 'track', trackIndex: currentTrackIndex });
-        setTimeout(() => {
-          if (netConn === conn && conn.open) conn.send({ type: 'track', trackIndex: currentTrackIndex });
-        }, 500);
+      };
+      if (isHost) {
+        // Host's track choice is authoritative. Wait for the channel to
+        // genuinely be open before sending — the 'connection' event can
+        // fire slightly before the data channel is actually ready — plus
+        // one backup resend shortly after in case the first send still
+        // raced ahead of the guest's data listener being wired up.
+        if (conn.open) sendTrackChoice();
+        else conn.on('open', sendTrackChoice);
+        setTimeout(sendTrackChoice, 500);
       }
 
       el.overlay.style.display = 'none';
@@ -1430,12 +1443,17 @@
     function mpHandleDisconnect() {
       if (!isMultiplayer) return;
       remoteState.active = false;
+      if (remoteCar) remoteCar.setEnabled(false);
+      if (remoteNameTag) remoteNameTag.setEnabled(false);
       if (el.mpHudText) el.mpHudText.textContent = 'Opponent disconnected';
+      if (el.mpOpponentLap) el.mpOpponentLap.textContent = '';
       netConn = null;
     }
 
     function mpHostRace() {
       if (typeof Peer === 'undefined') { mpSetStatus('host', 'Multiplayer library failed to load — check your connection.', true); return; }
+      if (isMultiplayer || mpConnecting) return; // already racing or already mid-attempt — ignore a repeat click
+      mpConnecting = true;
       if (peer) { peer.destroy(); peer = null; }
       const code = mpRandomCode();
       mpSetStatus('host', 'Creating room…');
@@ -1445,19 +1463,23 @@
         mpSetStatus('host', 'Room code: ' + code + ' — share it, waiting for them to join…');
       });
       peer.on('connection', (conn) => {
+        mpConnecting = false;
         mpSetStatus('host', 'Opponent joined!');
         mpAttachConnection(conn, true);
       });
       peer.on('error', (err) => {
-        if (err && err.type === 'unavailable-id') { mpHostRace(); return; } // code taken — retry with a new one
+        if (err && err.type === 'unavailable-id') { mpConnecting = false; mpHostRace(); return; } // code taken — retry with a new one
+        mpConnecting = false;
         mpSetStatus('host', 'Connection failed (' + (err && err.type ? err.type : 'unknown') + ')', true);
       });
     }
 
     function mpJoinRace(codeRaw) {
       if (typeof Peer === 'undefined') { mpSetStatus('join', 'Multiplayer library failed to load — check your connection.', true); return; }
+      if (isMultiplayer || mpConnecting) return; // already racing or already mid-attempt — ignore a repeat click
       const code = (codeRaw || '').trim().toUpperCase();
       if (code.length !== 4) { mpSetStatus('join', 'Enter the 4-character room code.', true); return; }
+      mpConnecting = true;
       if (peer) { peer.destroy(); peer = null; }
       mpSetStatus('join', 'Connecting…');
       peer = new Peer();
@@ -1465,12 +1487,14 @@
       peer.on('open', () => {
         const conn = peer.connect(MP_ROOM_PREFIX + code, { reliable: true });
         const failTimer = setTimeout(() => {
+          mpConnecting = false;
           mpSetStatus('join', 'No response — check the code and try again.', true);
         }, MP_STALE_MS);
-        conn.on('open', () => { clearTimeout(failTimer); mpAttachConnection(conn, false); });
-        conn.on('error', () => { clearTimeout(failTimer); mpSetStatus('join', 'Could not reach that room.', true); });
+        conn.on('open', () => { clearTimeout(failTimer); mpConnecting = false; mpAttachConnection(conn, false); });
+        conn.on('error', () => { clearTimeout(failTimer); mpConnecting = false; mpSetStatus('join', 'Could not reach that room.', true); });
       });
       peer.on('error', (err) => {
+        mpConnecting = false;
         mpSetStatus('join', 'Connection failed (' + (err && err.type ? err.type : 'unknown') + ')', true);
       });
     }
