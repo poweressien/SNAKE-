@@ -276,6 +276,7 @@
         <button class="mpTab active" data-track="0">Uyo Circuit</button>
         <button class="mpTab" data-track="1">Ibom Hairpins</button>
         <button class="mpTab" data-track="2">Delta Sweep</button>
+        <button class="mpTab" data-track="3">Airport Road</button>
       </div>
 
       <button id="startBtn">Start Engine</button>
@@ -321,11 +322,8 @@
     // ---------- CONFIG ----------
     const TOTAL_LAPS = 3;
     const TRACK_SAMPLES = 480;
-    const ROAD_HALF_WIDTH = 6;
     const PAVEMENT_WIDTH = 1.6;
-    const WALL_LIMIT = ROAD_HALF_WIDTH + PAVEMENT_WIDTH; // hard boundary — cars cannot cross this
     const WALL_BOUNCE_MARGIN = 0.4; // settle-back after a hit — also gives slack against reference-frame drift on curves
-    const TREE_COUNT = 140;
 
     const MAX_SPEED = 46;
     const MAX_REVERSE = -16;
@@ -358,14 +356,20 @@
     const sun = new BABYLON.DirectionalLight('sun', new BABYLON.Vector3(-0.5, -1, 0.4), scene);
     sun.intensity = 0.9;
 
-    // ---------- TRACKS (each is just a polar radius function — since every
-    // angle maps to exactly one radius, the resulting loop can never
+    // ---------- TRACKS. Loop tracks are a polar radius function — since
+    // every angle maps to exactly one radius, the resulting loop can never
     // self-intersect no matter how the harmonics are tuned, as long as
-    // amplitudes stay comfortably below the base radius) ----------
+    // amplitudes stay comfortably below the base radius. The straight track
+    // uses a different generator entirely (see buildStadiumPath below) since
+    // "long straight road" isn't something a single radius-per-angle
+    // function can produce. Road width and tree density now live per-track
+    // too, so the straight can be built as a genuinely wide, sparse highway
+    // instead of reusing the circuits' 2-lane, tree-lined look. ----------
     const TRACKS = [
-      { name: 'Uyo Circuit', radiusFn: (a) => 150 + Math.sin(a * 3) * 38 + Math.cos(a * 2) * 22 + Math.sin(a * 5 + 1) * 10 },
-      { name: 'Ibom Hairpins', radiusFn: (a) => 120 + Math.sin(a * 5) * 28 + Math.cos(a * 7) * 16 + Math.sin(a * 2 + 0.5) * 12 },
-      { name: 'Delta Sweep', radiusFn: (a) => 185 + Math.sin(a * 2) * 45 + Math.cos(a * 3 + 0.8) * 20 }
+      { name: 'Uyo Circuit', pathFn: (samples) => buildTrackPath(samples, (a) => 150 + Math.sin(a * 3) * 38 + Math.cos(a * 2) * 22 + Math.sin(a * 5 + 1) * 10), roadHalfWidth: 6, treeCount: 140 },
+      { name: 'Ibom Hairpins', pathFn: (samples) => buildTrackPath(samples, (a) => 120 + Math.sin(a * 5) * 28 + Math.cos(a * 7) * 16 + Math.sin(a * 2 + 0.5) * 12), roadHalfWidth: 6, treeCount: 140 },
+      { name: 'Delta Sweep', pathFn: (samples) => buildTrackPath(samples, (a) => 185 + Math.sin(a * 2) * 45 + Math.cos(a * 3 + 0.8) * 20), roadHalfWidth: 6, treeCount: 140 },
+      { name: 'Airport Road', pathFn: (samples) => buildStadiumPath(samples, 230, 46), roadHalfWidth: 10, treeCount: 46 }
     ];
 
     // ---------- TRACK PATH (procedural closed loop, no external assets) ----------
@@ -378,8 +382,41 @@
       }
       return pts;
     }
+
+    // A "stadium": two long straights joined by a semicircular turnaround at
+    // each end, sampled at constant spacing by arc length (not angle) so the
+    // straights and the curves both get even point density. Point 0 sits at
+    // the start of a straight, so the race begins on it immediately.
+    function buildStadiumPath(samples, straightLen, capRadius) {
+      const perimeter = 2 * straightLen + 2 * Math.PI * capRadius;
+      const capArc = Math.PI * capRadius;
+      const pts = [];
+      for (let i = 0; i < samples; i++) {
+        const s = (i / samples) * perimeter;
+        let x, z;
+        if (s < straightLen) {
+          x = -capRadius;
+          z = -straightLen / 2 + s;
+        } else if (s < straightLen + capArc) {
+          const angle = Math.PI - ((s - straightLen) / capArc) * Math.PI;
+          x = Math.cos(angle) * capRadius;
+          z = straightLen / 2 + Math.sin(angle) * capRadius;
+        } else if (s < 2 * straightLen + capArc) {
+          const s2 = s - straightLen - capArc;
+          x = capRadius;
+          z = straightLen / 2 - s2;
+        } else {
+          const angle = -((s - 2 * straightLen - capArc) / capArc) * Math.PI;
+          x = Math.cos(angle) * capRadius;
+          z = -straightLen / 2 + Math.sin(angle) * capRadius;
+        }
+        pts.push(new BABYLON.Vector3(x, 0, z));
+      }
+      return pts;
+    }
+
     const N = TRACK_SAMPLES; // same sample count on every track, so this never needs to change
-    let trackPath, startTangent, startHeading, avgSegLen;
+    let trackPath, startTangent, startHeading, avgSegLen, roadHalfWidth, wallLimit, treeCount;
 
     function tangentAt(i) {
       const next = trackPath[(i + 1) % N];
@@ -392,7 +429,7 @@
     }
 
     // ---------- ROAD + PAVEMENT (ribbons built from left/right offset rails
-    // — the pavement's outer edge, at WALL_LIMIT, is where the hard boundary
+    // — the pavement's outer edge, at wallLimit, is where the hard boundary
     // sits) ----------
     function buildRoadAndPavement(root, uid) {
       const leftEdge = [];
@@ -402,10 +439,10 @@
       for (let i = 0; i < N; i++) {
         const p = trackPath[i];
         const perp = perpAt(i);
-        leftEdge.push(p.add(perp.scale(ROAD_HALF_WIDTH)));
-        rightEdge.push(p.add(perp.scale(-ROAD_HALF_WIDTH)));
-        pavementOuterLeft.push(p.add(perp.scale(WALL_LIMIT)));
-        pavementOuterRight.push(p.add(perp.scale(-WALL_LIMIT)));
+        leftEdge.push(p.add(perp.scale(roadHalfWidth)));
+        rightEdge.push(p.add(perp.scale(-roadHalfWidth)));
+        pavementOuterLeft.push(p.add(perp.scale(wallLimit)));
+        pavementOuterRight.push(p.add(perp.scale(-wallLimit)));
       }
       leftEdge.push(leftEdge[0].clone());
       rightEdge.push(rightEdge[0].clone());
@@ -476,9 +513,9 @@
       const p = trackPath[0];
       const perp = perpAt(0);
       const squareCount = 8;
-      const squareSize = (ROAD_HALF_WIDTH * 2) / squareCount;
+      const squareSize = (roadHalfWidth * 2) / squareCount;
       for (let i = 0; i < squareCount; i++) {
-        const offset = -ROAD_HALF_WIDTH + squareSize * (i + 0.5);
+        const offset = -roadHalfWidth + squareSize * (i + 0.5);
         const square = BABYLON.MeshBuilder.CreateBox('startSq' + i + '_' + uid, { width: squareSize * 0.95, height: 0.04, depth: 1.4 }, scene);
         const mat = new BABYLON.StandardMaterial('startSqMat' + i + '_' + uid, scene);
         mat.diffuseColor = (i % 2 === 0) ? new BABYLON.Color3(0.9, 0.9, 0.92) : new BABYLON.Color3(0.05, 0.05, 0.05);
@@ -506,12 +543,12 @@
       foliage.isVisible = false;
       foliage.parent = root;
 
-      for (let i = 0; i < TREE_COUNT; i++) {
-        const idx = Math.floor((i * N) / TREE_COUNT) % N;
+      for (let i = 0; i < treeCount; i++) {
+        const idx = Math.floor((i * N) / treeCount) % N;
         const p = trackPath[idx];
         const perp = perpAt(idx);
         const side = (i % 2 === 0) ? 1 : -1;
-        const dist = ROAD_HALF_WIDTH + 5 + Math.random() * 14;
+        const dist = roadHalfWidth + 5 + Math.random() * 14;
         const pos = p.add(perp.scale(side * dist));
         const scale = 0.75 + Math.random() * 0.7;
         const rotY = Math.random() * Math.PI * 2;
@@ -571,7 +608,7 @@
       const pillarH = signCenterY - signH / 2;
       const perpStart = perpAt(0);
       [-1, 1].forEach((side) => {
-        const basePos = signPos.add(perpStart.scale(side * (WALL_LIMIT + 1.2)));
+        const basePos = signPos.add(perpStart.scale(side * (wallLimit + 1.2)));
         const pillar = BABYLON.MeshBuilder.CreateBox('gantryPillar' + side + '_' + uid, { width: 0.5, height: pillarH, depth: 0.5 }, scene);
         pillar.position.set(basePos.x, pillarH / 2, basePos.z);
         pillar.material = pillarMat;
@@ -583,9 +620,12 @@
     // whole track can be shown/hidden with a single setEnabled call, no
     // dispose/rebuild needed when the player switches tracks later.
     function buildTrackData(track, uid) {
-      trackPath = buildTrackPath(TRACK_SAMPLES, track.radiusFn);
+      trackPath = track.pathFn(TRACK_SAMPLES);
       startTangent = tangentAt(0);
       startHeading = Math.atan2(startTangent.x, startTangent.z);
+      roadHalfWidth = track.roadHalfWidth;
+      wallLimit = roadHalfWidth + PAVEMENT_WIDTH;
+      treeCount = track.treeCount;
       const root = new BABYLON.TransformNode('trackRoot_' + uid, scene);
       buildRoadAndPavement(root, uid);
       buildLaneMarkings(root, uid);
@@ -599,7 +639,7 @@
       }
       avgSegLen = len / N;
       root.setEnabled(false);
-      return { name: track.name, path: trackPath, startTangent, startHeading, avgSegLen, root };
+      return { name: track.name, path: trackPath, startTangent, startHeading, avgSegLen, roadHalfWidth, wallLimit, treeCount, root };
     }
 
     // ---------- CAR (stepped "greenhouse" body built from primitives — hood,
@@ -798,6 +838,9 @@
       startTangent = td.startTangent;
       startHeading = td.startHeading;
       avgSegLen = td.avgSegLen;
+      roadHalfWidth = td.roadHalfWidth;
+      wallLimit = td.wallLimit;
+      treeCount = td.treeCount;
     }
     switchToTrack(0);
 
@@ -1728,21 +1771,21 @@
 
       // Hard boundary: find how far the car sits off the centerline (signed,
       // via the same perpendicular used to build the road), and if it's past
-      // WALL_LIMIT, clamp it back to the edge and bleed off speed — this is
-      // the "hits the pavement, can't go out" wall, replacing the old soft
-      // grass-drag approach.
+      // wallLimit (this track's own road+shoulder width), clamp it back to
+      // the edge and bleed off speed — this is the "hits the pavement,
+      // can't go out" wall, replacing the old soft grass-drag approach.
       const nearest = nearestTrackIndex(state.x, state.z);
       const nearestPoint = trackPath[nearest.index];
       const perpHere = perpAt(nearest.index);
       const lateral = (state.x - nearestPoint.x) * perpHere.x + (state.z - nearestPoint.z) * perpHere.z;
       let hitWall = false;
-      if (Math.abs(lateral) > WALL_LIMIT) {
+      if (Math.abs(lateral) > wallLimit) {
         // Correct only the overshoot, along the perpendicular — NOT a full
         // reposition onto the nearest sample's cross-section, which would
         // silently cancel whatever forward progress this frame's movement
         // made (that was pinning cars in place instead of letting them
         // slide along the barrier).
-        const targetLateral = Math.sign(lateral) * (WALL_LIMIT - WALL_BOUNCE_MARGIN);
+        const targetLateral = Math.sign(lateral) * (wallLimit - WALL_BOUNCE_MARGIN);
         const correction = targetLateral - lateral;
         state.x += perpHere.x * correction;
         state.z += perpHere.z * correction;
