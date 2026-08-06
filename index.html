@@ -1331,10 +1331,45 @@
     // Host and guest funnel through the exact same mpAttachConnection() once
     // linked, so send/receive logic can never quietly differ between the two
     // sides — that asymmetry is the classic cause of "syncs one way, not the
-    // other." No TURN relay is configured, so on some networks — strict
-    // corporate wifi, certain mobile carriers, double-NAT — the two browsers
-    // simply can't punch a direct path to each other. That's a limit of "no
-    // backend" P2P itself, not something client code can route around.) ----------
+    // other."
+    //
+    // TURN relay: same-device/split-screen or same-wifi connections work with
+    // STUN alone, because both sides can be reached directly. Phone-to-phone
+    // or PC-to-phone across different networks routinely can't — mobile
+    // carriers almost universally use symmetric/carrier-grade NAT, which STUN
+    // is fundamentally unable to punch through (this is a property of that
+    // NAT type, not a bug in this code). The only fix is a TURN relay server.
+    // Below, MP_TURN_APP_NAME / MP_TURN_API_KEY are blank by default — get
+    // free ones (20GB/month, no card needed) at metered.ca (Open Relay
+    // Project), then paste them in. Without a key, connections still work
+    // exactly as before (STUN-only via Google's public servers) — this only
+    // upgrades reliability once filled in, it can't break anything by being
+    // left blank. ----------
+    const MP_TURN_APP_NAME = ''; // e.g. 'myapp' — from your metered.ca dashboard
+    const MP_TURN_API_KEY = '';  // your metered.ca API key
+    const MP_STUN_SERVERS = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' }
+    ];
+
+    async function mpGetIceServers() {
+      if (!MP_TURN_APP_NAME || !MP_TURN_API_KEY) return MP_STUN_SERVERS;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const url = 'https://' + MP_TURN_APP_NAME + '.metered.live/api/v1/turn/credentials?apiKey=' + MP_TURN_API_KEY;
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!res.ok) return MP_STUN_SERVERS;
+        const turnServers = await res.json();
+        if (!Array.isArray(turnServers) || turnServers.length === 0) return MP_STUN_SERVERS;
+        return MP_STUN_SERVERS.concat(turnServers);
+      } catch (e) {
+        return MP_STUN_SERVERS; // bad key, offline, service hiccup — fail open rather than block the connection
+      }
+    }
+
     const MP_ROOM_PREFIX = 'uyodrift-';
     const MP_SEND_INTERVAL = 0.05;  // 20Hz outgoing state
     const MP_STALE_MS = 8000;       // treat opponent as gone if silent this long
@@ -1526,14 +1561,16 @@
       netConn = null;
     }
 
-    function mpHostRace() {
+    async function mpHostRace() {
       if (typeof Peer === 'undefined') { mpSetStatus('host', 'Multiplayer library failed to load — check your connection.', true); return; }
       if (isMultiplayer || mpConnecting) return; // already racing or already mid-attempt — ignore a repeat click
       mpConnecting = true;
       if (peer) { peer.destroy(); peer = null; }
       const code = mpRandomCode();
       mpSetStatus('host', 'Creating room…');
-      peer = new Peer(MP_ROOM_PREFIX + code);
+      const iceServers = await mpGetIceServers();
+      if (!mpConnecting) return; // cancelled (e.g. peer torn down) while we were fetching
+      peer = new Peer(MP_ROOM_PREFIX + code, { config: { iceServers } });
 
       peer.on('open', () => {
         mpSetStatus('host', 'Room code: ' + code + ' — share it, waiting for them to join…');
@@ -1550,7 +1587,7 @@
       });
     }
 
-    function mpJoinRace(codeRaw) {
+    async function mpJoinRace(codeRaw) {
       if (typeof Peer === 'undefined') { mpSetStatus('join', 'Multiplayer library failed to load — check your connection.', true); return; }
       if (isMultiplayer || mpConnecting) return; // already racing or already mid-attempt — ignore a repeat click
       const code = (codeRaw || '').trim().toUpperCase();
@@ -1558,7 +1595,9 @@
       mpConnecting = true;
       if (peer) { peer.destroy(); peer = null; }
       mpSetStatus('join', 'Connecting…');
-      peer = new Peer();
+      const iceServers = await mpGetIceServers();
+      if (!mpConnecting) return; // cancelled while we were fetching
+      peer = new Peer(undefined, { config: { iceServers } });
 
       peer.on('open', () => {
         const conn = peer.connect(MP_ROOM_PREFIX + code, { reliable: true });
