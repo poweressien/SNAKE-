@@ -53,7 +53,7 @@
 
   /* ---- Touch / tilt controls: hidden by default, shown only on devices
      whose primary pointer is coarse (phones/tablets), via media query below ---- */
-  #tiltControls, #touchSteer, #touchPedals { display: none; }
+  #tiltControls, #touchSteer, #touchPedals, #touchBoost { display: none; }
 
   .pillBtn {
     pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
@@ -99,7 +99,7 @@
   }
 
   @media (pointer: coarse) {
-    #tiltControls, #touchSteer, #touchPedals { display: flex; }
+    #tiltControls, #touchSteer, #touchPedals, #touchBoost { display: flex; }
     #tiltControls { position: fixed; top: 68px; right: 18px; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 5; }
     #hint { display: none; }
     #bottomRight { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
@@ -197,6 +197,38 @@
   .mpStatus { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--text-dim); min-height: 16px; text-align: center; }
   #mpHud { display: none; top: 18px; left: 50%; transform: translateX(-50%); text-align: center; }
   #mpHud .lap-value { font-size: 14px; }
+
+  /* ---- Boost meter ---- */
+  .boostBarTrack { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  .boostBarFill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff7f1f, #ffb627); border-radius: 3px; }
+  .boostBarFill.ready { box-shadow: 0 0 8px rgba(255,182,39,0.9); }
+  .boostBarFill.active { background: linear-gradient(90deg, #22a745, #6fe08a); }
+  #touchBoost { position: fixed; right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(112px + env(safe-area-inset-bottom, 0px)); z-index: 5; }
+  #btnBoost { width: 52px; height: 52px; font-size: 20px; background: rgba(34,167,69,0.28); border-color: rgba(111,224,138,0.5); }
+
+  /* ---- Stats / achievements screen ---- */
+  #statsScreen { display: none; max-height: 82vh; overflow-y: auto; }
+  .statsRow {
+    display: flex; justify-content: space-between; align-items: center; gap: 14px;
+    width: 100%; padding: 9px 0; border-bottom: 1px solid var(--panel-line);
+    font-family: 'Space Mono', monospace; font-size: 13px; color: var(--text);
+  }
+  .achieveRow { opacity: 0.4; }
+  .achieveRow.unlocked { opacity: 1; }
+  .achieveDesc { color: var(--text-dim); font-size: 11px; text-align: right; }
+
+  /* ---- Achievement toast ---- */
+  #achievementToast {
+    position: fixed; top: 18px; left: 50%; transform: translate(-50%, -140%);
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--amber); border-left: 3px solid var(--amber);
+    padding: 10px 18px; z-index: 15; opacity: 0; pointer-events: none;
+    transition: transform 0.35s ease, opacity 0.35s ease;
+  }
+  #achievementToast.show { transform: translate(-50%, 0); opacity: 1; }
+  .achToastIcon { font-size: 22px; }
+  .achToastLabel { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+  .achToastTitle { font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: var(--amber); font-size: 14px; }
 </style>
 </head>
 <body>
@@ -226,9 +258,10 @@
     <div id="bottomRight" class="panel">
       <div class="speed-value"><span id="speedValue">0</span></div>
       <div class="speed-unit">KM/H</div>
+      <div class="boostBarTrack"><div class="boostBarFill" id="boostBarFill"></div></div>
     </div>
 
-    <div id="hint">WASD / Arrow keys to drive &middot; R to restart &middot; M to mute music</div>
+    <div id="hint">WASD / Arrow keys to drive &middot; Shift to boost &middot; R to restart &middot; M to mute music</div>
 
     <button id="muteBtn" title="Toggle music (M)">&#128266;</button>
 
@@ -247,10 +280,22 @@
       <button id="btnBrake" class="touchBtn pedal">&#9660;</button>
       <button id="btnAccel" class="touchBtn pedal accel">&#9650;</button>
     </div>
+
+    <div id="touchBoost">
+      <button id="btnBoost" class="touchBtn">&#9889;</button>
+    </div>
   </div>
 
   <div id="offTrack">Barrier</div>
   <div id="impactFlash"></div>
+
+  <div id="achievementToast">
+    <div class="achToastIcon">&#127942;</div>
+    <div>
+      <div class="achToastLabel">Achievement Unlocked</div>
+      <div class="achToastTitle" id="achievementToastTitle"></div>
+    </div>
+  </div>
 
   <div id="rotateHint">
     <div class="rotateIcon">&#128241;</div>
@@ -268,8 +313,11 @@
         <div><kbd>S</kbd><span>brake</span></div>
         <div><kbd>A</kbd><span>left</span></div>
         <div><kbd>D</kbd><span>right</span></div>
+        <div><kbd>Shift</kbd><span>boost</span></div>
         <div><kbd>M</kbd><span>mute</span></div>
       </div>
+      <p style="font-size:12px; color:var(--text-dim); margin-top:10px;">Drift hard corners to fill your boost meter</p>
+      <button id="statsBtn" class="pillBtn" style="margin-top:6px;">View Progress</button>
 
       <div class="mpDivider">choose your track</div>
       <div id="trackPicker" class="mpTabs">
@@ -298,6 +346,15 @@
           <div id="mpJoinStatus" class="mpStatus"></div>
         </div>
       </div>
+    </div>
+    <div id="statsScreen" class="menuPanel">
+      <h1><span class="word-uyo">YOUR</span> <span class="word-drift">PROGRESS</span></h1>
+      <div class="title-divider"></div>
+      <div class="mpDivider">best times</div>
+      <div id="statsBestTimes"></div>
+      <div class="mpDivider">achievements</div>
+      <div id="statsAchievements"></div>
+      <button id="statsBackBtn" class="pillBtn" style="margin-top:20px;">Back</button>
     </div>
     <div id="gameOverScreen" class="menuPanel">
       <h1><span class="word-uyo">RACE</span> <span class="word-drift">COMPLETE</span></h1>
@@ -336,6 +393,15 @@
     const TURN_HIGH_SPEED_SOFTEN = 16;// how quickly strength fades above the ramp speed
     const TURN_MIN_STRENGTH = 0.3;    // floor so it's still steerable flat-out, just gentler
     const CORNER_SCRUB = 5.5;         // speed bled off per second of held lock, scaled by turn strength
+
+    const DRIFT_STEER_THRESHOLD = 0.55; // steer magnitude needed to count as drifting
+    const DRIFT_SPEED_THRESHOLD = 14;   // minimum speed to count as drifting
+    const DRIFT_BOOST_FILL_RATE = 26;   // boost meter points/sec earned while drifting
+    const DRIFT_UNLOCK_SECONDS = 3.0;   // continuous drift time for the Danfo Driver achievement
+    const BOOST_MAX = 100;
+    const BOOST_DRAIN_RATE = 42;        // boost points/sec consumed while boosting
+    const BOOST_ACCEL_RATE = 34;        // extra forward thrust/sec while boosting (independent of holding accel)
+    const BOOST_MAX_SPEED_MULT = 1.3;   // temporary speed cap multiplier while boosting
 
     // ---------- ENGINE / SCENE ----------
     const canvas = document.getElementById('renderCanvas');
@@ -901,16 +967,20 @@
           state.heading += Math.sign(cross) * 0.09 * severity;
           tc.staggerTimer = 0.35 + severity * 0.45; // the traffic car reels too, harder hits stagger it longer
           triggerImpactEffect(state.x, 0.6, state.z, severity);
+          state.trafficHitsThisRace++;
+          if (state.trafficHitsThisRace >= 5) unlockAchievement('bumper_to_bumper');
         }
       });
     }
 
     const state = {
       x: trackPath[0].x, z: trackPath[0].z,
-      heading: startHeading, speed: 0, roll: 0,
+      heading: startHeading, visualHeading: startHeading, speed: 0, roll: 0,
       lastNearestIndex: 0, progress: 0,
       lap: 1, lapStart: 0, raceClock: 0,
-      bestLap: null, finished: false, wasAtWall: false
+      bestLap: loadBestTime(TRACKS[currentTrackIndex].name), finished: false, wasAtWall: false,
+      driftTime: 0, boost: 0, boosting: false,
+      trafficHitsThisRace: 0, hadWallHitThisRace: false
     };
 
     // Resets the local car (position/heading/speed) to the currently active
@@ -918,8 +988,9 @@
     // track sync, neither of which should touch lap count or race clock.
     function resetCarToTrackStart() {
       state.x = trackPath[0].x; state.z = trackPath[0].z;
-      state.heading = startHeading; state.speed = 0; state.roll = 0;
+      state.heading = startHeading; state.visualHeading = startHeading; state.speed = 0; state.roll = 0;
       state.lastNearestIndex = 0; state.progress = 0;
+      state.driftTime = 0; state.boost = 0; state.boosting = false;
       car.position.set(state.x, 0, state.z);
       car.rotation.y = state.heading;
       car.rotation.z = 0;
@@ -938,7 +1009,7 @@
     // ---------- INPUT (keyboard + on-screen touch buttons + device tilt —
     // all feed the same `keys` map / tiltSteer value that update() reads) ----------
     const keys = {};
-    const GAME_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'r'];
+    const GAME_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'r', 'shift'];
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       if (GAME_KEYS.includes(k)) e.preventDefault();
@@ -1218,6 +1289,74 @@
       }
     }
 
+    // ---------- DRIFT & BOOST ----------
+    const smokeMat = new BABYLON.StandardMaterial('smokeMat', scene);
+    smokeMat.diffuseColor = new BABYLON.Color3(0.75, 0.75, 0.78);
+    smokeMat.emissiveColor = new BABYLON.Color3(0.35, 0.35, 0.37);
+    smokeMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    smokeMat.alpha = 0.45;
+    let activeDriftSmoke = [];
+    let driftSmokeAccum = 0;
+
+    function spawnDriftSmoke(x, z) {
+      const puff = BABYLON.MeshBuilder.CreateSphere('smoke', { diameter: 0.3, segments: 5 }, scene);
+      puff.material = smokeMat;
+      puff.position.set(x + (Math.random() - 0.5) * 0.5, 0.25, z + (Math.random() - 0.5) * 0.5);
+      activeDriftSmoke.push({ mesh: puff, life: 0, maxLife: 0.55 + Math.random() * 0.25 });
+    }
+    function updateDriftSmoke(dt) {
+      for (let i = activeDriftSmoke.length - 1; i >= 0; i--) {
+        const s = activeDriftSmoke[i];
+        s.life += dt;
+        if (s.life >= s.maxLife) { s.mesh.dispose(); activeDriftSmoke.splice(i, 1); continue; }
+        const growth = 1 + s.life * 2.2;
+        s.mesh.position.y += dt * 0.5;
+        s.mesh.scaling.set(growth, growth, growth);
+      }
+    }
+
+    // Boost application — must run BEFORE the speed cap in the main update
+    // loop, since it changes what that cap should be for this frame. Returns
+    // the effective max speed to clamp against.
+    function applyBoostPreStep(dt) {
+      const boostHeld = isDown('shift');
+      const wasBoosting = state.boosting;
+      state.boosting = boostHeld && state.boost > 0;
+      if (state.boosting && !wasBoosting) {
+        boostUseCount++;
+        saveBoostCount();
+        if (boostUseCount >= 15) unlockAchievement('turbo_charged');
+      }
+      if (state.boosting) {
+        state.speed += BOOST_ACCEL_RATE * dt;
+        state.boost = Math.max(0, state.boost - BOOST_DRAIN_RATE * dt);
+      }
+      return state.boosting ? MAX_SPEED * BOOST_MAX_SPEED_MULT : MAX_SPEED;
+    }
+
+    // Drift detection — must run AFTER steerInput is computed in the main
+    // update loop, since it needs to know how hard the player is turning.
+    function updateDriftState(dt, steerInput) {
+      const isDrifting = Math.abs(steerInput) > DRIFT_STEER_THRESHOLD && Math.abs(state.speed) > DRIFT_SPEED_THRESHOLD;
+      if (isDrifting) {
+        state.driftTime += dt;
+        state.boost = Math.min(BOOST_MAX, state.boost + DRIFT_BOOST_FILL_RATE * dt);
+        driftSmokeAccum += dt;
+        if (driftSmokeAccum > 0.05) {
+          driftSmokeAccum = 0;
+          spawnDriftSmoke(state.x - Math.sin(state.heading) * 2.0, state.z - Math.cos(state.heading) * 2.0);
+        }
+        if (state.driftTime >= DRIFT_UNLOCK_SECONDS) unlockAchievement('danfo_driver');
+      } else {
+        state.driftTime = 0;
+      }
+      if (el.boostBarFill) {
+        el.boostBarFill.style.width = state.boost + '%';
+        el.boostBarFill.classList.toggle('ready', state.boost >= BOOST_MAX);
+        el.boostBarFill.classList.toggle('active', state.boosting);
+      }
+    }
+
     // ---------- IMPACT EFFECTS (sparks + screen flash + thud, shared by wall
     // hits and traffic bumps, gated by a cooldown so grinding along something
     // doesn't spam the effect every frame) ----------
@@ -1323,6 +1462,79 @@
         if (d < best) { best = d; bestI = i; }
       }
       return { index: bestI, dist: Math.sqrt(best) };
+    }
+
+    // ---------- PROGRESSION (achievements + per-track best times, all local —
+    // no backend, no multiplayer involvement, purely localStorage) ----------
+    const ACHIEVEMENTS = [
+      { id: 'chequered_flag', name: 'Chequered Flag', desc: 'Finish your first race' },
+      { id: 'danfo_driver', name: 'Danfo Driver', desc: 'Hold a drift for 3 seconds straight' },
+      { id: 'turbo_charged', name: 'Turbo Charged', desc: 'Use boost 15 times' },
+      { id: 'bumper_to_bumper', name: 'Bumper to Bumper', desc: 'Hit 5 traffic cars in one race' },
+      { id: 'clean_sweep', name: 'Clean Sweep', desc: 'Finish a race without hitting a wall' },
+      { id: 'road_tripper', name: 'Road Tripper', desc: 'Race on all 4 tracks' },
+      { id: 'track_master', name: 'Track Master', desc: 'Set a best time on every track' },
+      { id: 'squad_racing', name: 'Squad Racing', desc: 'Finish a multiplayer race' }
+    ];
+
+    let unlockedAchievements = new Set();
+    let boostUseCount = 0;
+    let tracksRaced = new Set();
+    let achievementToastTimer = null;
+
+    function loadProgress() {
+      try { unlockedAchievements = new Set(JSON.parse(localStorage.getItem('uyodrift_achievements') || '[]')); }
+      catch (e) { unlockedAchievements = new Set(); }
+      try { boostUseCount = parseInt(localStorage.getItem('uyodrift_boostCount') || '0', 10) || 0; }
+      catch (e) { boostUseCount = 0; }
+      try { tracksRaced = new Set(JSON.parse(localStorage.getItem('uyodrift_tracksRaced') || '[]')); }
+      catch (e) { tracksRaced = new Set(); }
+    }
+    function saveAchievements() { try { localStorage.setItem('uyodrift_achievements', JSON.stringify([...unlockedAchievements])); } catch (e) {} }
+    function saveBoostCount() { try { localStorage.setItem('uyodrift_boostCount', String(boostUseCount)); } catch (e) {} }
+    function saveTracksRaced() { try { localStorage.setItem('uyodrift_tracksRaced', JSON.stringify([...tracksRaced])); } catch (e) {} }
+
+    function loadBestTimes() {
+      try { return JSON.parse(localStorage.getItem('uyodrift_bestTimes') || '{}'); }
+      catch (e) { return {}; }
+    }
+    function loadBestTime(trackName) {
+      const times = loadBestTimes();
+      return typeof times[trackName] === 'number' ? times[trackName] : null;
+    }
+    function saveBestTime(trackName, time) {
+      const times = loadBestTimes();
+      times[trackName] = time;
+      try { localStorage.setItem('uyodrift_bestTimes', JSON.stringify(times)); } catch (e) {}
+      if (TRACKS.every((t) => typeof times[t.name] === 'number')) unlockAchievement('track_master');
+    }
+
+    function unlockAchievement(id) {
+      if (unlockedAchievements.has(id)) return;
+      unlockedAchievements.add(id);
+      saveAchievements();
+      const a = ACHIEVEMENTS.find((x) => x.id === id);
+      if (a) showAchievementToast(a);
+    }
+
+    function showAchievementToast(achievement) {
+      if (!el.achievementToast) return;
+      el.achievementToastTitle.textContent = achievement.name;
+      el.achievementToast.classList.add('show');
+      clearTimeout(achievementToastTimer);
+      achievementToastTimer = setTimeout(() => { el.achievementToast.classList.remove('show'); }, 3200);
+    }
+
+    function renderStatsScreen() {
+      const times = loadBestTimes();
+      el.statsBestTimes.innerHTML = TRACKS.map((t) => {
+        const best = times[t.name];
+        return '<div class="statsRow"><span>' + t.name + '</span><span>' + (typeof best === 'number' ? formatTime(best) : '—') + '</span></div>';
+      }).join('');
+      el.statsAchievements.innerHTML = ACHIEVEMENTS.map((a) => {
+        const unlocked = unlockedAchievements.has(a.id);
+        return '<div class="statsRow achieveRow' + (unlocked ? ' unlocked' : '') + '"><span>' + (unlocked ? '🏆 ' : '🔒 ') + a.name + '</span><span class="achieveDesc">' + a.desc + '</span></div>';
+      }).join('');
     }
 
     // ---------- MULTIPLAYER (WebRTC via PeerJS, no custom backend — PeerJS's
@@ -1562,6 +1774,7 @@
       if (typeof trackIndex !== 'number' || !allTrackData[trackIndex] || trackIndex === currentTrackIndex) return;
       switchToTrack(trackIndex);
       resetCarToTrackStart();
+      state.bestLap = loadBestTime(TRACKS[trackIndex].name);
     }
 
     function mpHandleDisconnect() {
@@ -1697,12 +1910,22 @@
       mpCodeInput: document.getElementById('mpCodeInput'),
       mpHostStatus: document.getElementById('mpHostStatus'),
       mpJoinStatus: document.getElementById('mpJoinStatus'),
-      mpNameInput: document.getElementById('mpNameInput')
+      mpNameInput: document.getElementById('mpNameInput'),
+      boostBarFill: document.getElementById('boostBarFill'),
+      btnBoost: document.getElementById('btnBoost'),
+      statsBtn: document.getElementById('statsBtn'),
+      statsBackBtn: document.getElementById('statsBackBtn'),
+      statsScreen: document.getElementById('statsScreen'),
+      statsBestTimes: document.getElementById('statsBestTimes'),
+      statsAchievements: document.getElementById('statsAchievements'),
+      achievementToast: document.getElementById('achievementToast'),
+      achievementToastTitle: document.getElementById('achievementToastTitle')
     };
     (function restoreSavedName() {
       const saved = mpLoadSavedName();
       if (saved) { el.mpNameInput.value = saved; localPlayerName = saved; }
     })();
+    loadProgress();
     document.getElementById('lapTotal').textContent = TOTAL_LAPS;
     el.muteBtn.addEventListener('click', toggleMute);
     el.rotateContinueBtn.addEventListener('click', () => { el.rotateHint.style.display = 'none'; });
@@ -1711,6 +1934,7 @@
     bindTouchButton(el.btnRight, ['d', 'arrowright']);
     bindTouchButton(el.btnAccel, ['w', 'arrowup']);
     bindTouchButton(el.btnBrake, ['s', 'arrowdown']);
+    bindTouchButton(el.btnBoost, ['shift']);
 
     el.tiltBtn.addEventListener('click', () => {
       if (!started) startRace();
@@ -1743,6 +1967,16 @@
     el.mpNameInput.addEventListener('keydown', (e) => { e.stopPropagation(); });
     el.mpNameInput.addEventListener('keyup', (e) => { e.stopPropagation(); });
 
+    el.statsBtn.addEventListener('click', () => {
+      renderStatsScreen();
+      el.startScreen.style.display = 'none';
+      el.statsScreen.style.display = 'flex';
+    });
+    el.statsBackBtn.addEventListener('click', () => {
+      el.statsScreen.style.display = 'none';
+      el.startScreen.style.display = 'flex';
+    });
+
     const trackChips = document.querySelectorAll('#trackPicker .mpTab');
     trackChips.forEach((chip) => {
       chip.addEventListener('click', () => {
@@ -1752,6 +1986,7 @@
         chip.classList.add('active');
         switchToTrack(idx);
         resetCarToTrackStart();
+        state.bestLap = loadBestTime(TRACKS[idx].name);
       });
     });
 
@@ -1766,16 +2001,30 @@
       started = true;
       initAudio();
       el.overlay.style.display = 'none';
+      state.trafficHitsThisRace = 0;
+      state.hadWallHitThisRace = false;
+      state.driftTime = 0;
+      state.boost = 0;
+      tracksRaced.add(TRACKS[currentTrackIndex].name);
+      saveTracksRaced();
+      if (tracksRaced.size >= TRACKS.length) unlockAchievement('road_tripper');
     }
     el.startBtn.addEventListener('click', startRace);
     el.restartBtn.addEventListener('click', restartRace);
 
     function restartRace() {
       state.x = trackPath[0].x; state.z = trackPath[0].z;
-      state.heading = startHeading; state.speed = 0; state.roll = 0;
+      state.heading = startHeading; state.visualHeading = startHeading; state.speed = 0; state.roll = 0;
       state.lastNearestIndex = 0; state.progress = 0;
       state.lap = 1; state.lapStart = state.raceClock; state.finished = false;
       state.wasAtWall = false;
+      state.trafficHitsThisRace = 0;
+      state.hadWallHitThisRace = false;
+      state.driftTime = 0;
+      state.boost = 0;
+      tracksRaced.add(TRACKS[currentTrackIndex].name);
+      saveTracksRaced();
+      if (tracksRaced.size >= TRACKS.length) unlockAchievement('road_tripper');
       el.gameOverScreen.style.display = 'none';
       el.overlay.style.display = 'none';
       started = true;
@@ -1786,6 +2035,7 @@
       updateTraffic(dt);
       updateMusicScheduler();
       updateSparks(dt);
+      updateDriftSmoke(dt);
       checkTiltSignal();
       mpUpdateRemoteCar(dt);
       if (!started || state.finished) return;
@@ -1796,10 +2046,11 @@
       const left = isDown('a', 'arrowleft');
       const right = isDown('d', 'arrowright');
 
+      const effectiveMaxSpeed = applyBoostPreStep(dt);
       if (accel) state.speed += ACCEL_RATE * dt;
       if (brake) state.speed -= BRAKE_RATE * dt;
       state.speed -= state.speed * DRAG * dt;
-      state.speed = Math.max(MAX_REVERSE, Math.min(MAX_SPEED, state.speed));
+      state.speed = Math.max(MAX_REVERSE, Math.min(effectiveMaxSpeed, state.speed));
 
       const absSpeed = Math.abs(state.speed);
       const rampUp = Math.min(1, absSpeed / TURN_LOW_SPEED_RAMP);
@@ -1812,6 +2063,7 @@
       if (left) steerInput -= 1;
       if (right) steerInput += 1;
       steerInput = Math.max(-1, Math.min(1, steerInput));
+      updateDriftState(dt, steerInput);
 
       state.heading += TURN_RATE * speedFactor * steerInput * dt;
       if (steerInput !== 0) {
@@ -1852,6 +2104,7 @@
         }
         state.wasAtWall = true;
         hitWall = true;
+        state.hadWallHitThisRace = true;
         triggerImpactEffect(state.x, 0.6, state.z, Math.min(1, Math.abs(state.speed) / MAX_SPEED));
       } else {
         state.wasAtWall = false;
@@ -1859,7 +2112,12 @@
       el.offTrack.classList.toggle('show', hitWall);
 
       car.position.set(state.x, 0, state.z);
-      car.rotation.y = state.heading;
+      const headingLagRate = state.driftTime > 0 ? 4 : 14;
+      let visualHeadingDiff = state.heading - state.visualHeading;
+      while (visualHeadingDiff > Math.PI) visualHeadingDiff -= Math.PI * 2;
+      while (visualHeadingDiff < -Math.PI) visualHeadingDiff += Math.PI * 2;
+      state.visualHeading += visualHeadingDiff * Math.min(1, headingLagRate * dt);
+      car.rotation.y = state.visualHeading;
       const targetRoll = steerInput * 0.12 * turnStrength;
       state.roll += (targetRoll - state.roll) * 0.12;
       car.rotation.z = state.roll;
@@ -1877,7 +2135,10 @@
       if (state.progress >= N) {
         state.progress -= N;
         const lapTime = state.raceClock - state.lapStart;
-        if (state.bestLap === null || lapTime < state.bestLap) state.bestLap = lapTime;
+        if (state.bestLap === null || lapTime < state.bestLap) {
+          state.bestLap = lapTime;
+          saveBestTime(TRACKS[currentTrackIndex].name, lapTime);
+        }
         state.lapStart = state.raceClock;
         if (state.lap >= TOTAL_LAPS) {
           state.finished = true;
@@ -1885,6 +2146,9 @@
           el.startScreen.style.display = 'none';
           el.gameOverScreen.style.display = 'flex';
           el.overlay.style.display = 'flex';
+          unlockAchievement('chequered_flag');
+          if (!state.hadWallHitThisRace) unlockAchievement('clean_sweep');
+          if (isMultiplayer) unlockAchievement('squad_racing');
         } else {
           state.lap += 1;
         }
