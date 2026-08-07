@@ -1345,27 +1345,40 @@
     // exactly as before (STUN-only via Google's public servers) — this only
     // upgrades reliability once filled in, it can't break anything by being
     // left blank. ----------
-    const MP_TURN_APP_NAME = ''; // e.g. 'myapp' — from your metered.ca dashboard
-    const MP_TURN_API_KEY = '';  // your metered.ca API key
+    const MP_TURN_APP_NAME = 'uyodrift';
+    const MP_TURN_API_KEY = 'e13a24f92910d4fb51f07567ad2dbb8f7d61';
     const MP_STUN_SERVERS = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' }
     ];
 
+    function mpTurnConfigured() { return !!(MP_TURN_APP_NAME && MP_TURN_API_KEY); }
+
     async function mpGetIceServers() {
-      if (!MP_TURN_APP_NAME || !MP_TURN_API_KEY) return MP_STUN_SERVERS;
+      if (!mpTurnConfigured()) {
+        console.log('[uyodrift mp] No TURN key set (MP_TURN_APP_NAME/MP_TURN_API_KEY are blank) — STUN only. Same-network connections will work; phone-to-phone or different-network connections likely won\'t.');
+        return MP_STUN_SERVERS;
+      }
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
         const url = 'https://' + MP_TURN_APP_NAME + '.metered.live/api/v1/turn/credentials?apiKey=' + MP_TURN_API_KEY;
         const res = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
-        if (!res.ok) return MP_STUN_SERVERS;
+        if (!res.ok) {
+          console.warn('[uyodrift mp] TURN credential fetch failed: HTTP ' + res.status + ' from ' + url + ' — falling back to STUN only. Double-check MP_TURN_APP_NAME and MP_TURN_API_KEY are exactly what your metered.ca dashboard shows.');
+          return MP_STUN_SERVERS;
+        }
         const turnServers = await res.json();
-        if (!Array.isArray(turnServers) || turnServers.length === 0) return MP_STUN_SERVERS;
+        if (!Array.isArray(turnServers) || turnServers.length === 0) {
+          console.warn('[uyodrift mp] TURN credential response was empty or not an array — falling back to STUN only. Response was:', turnServers);
+          return MP_STUN_SERVERS;
+        }
+        console.log('[uyodrift mp] TURN relay active —', turnServers.length, 'server(s) received.');
         return MP_STUN_SERVERS.concat(turnServers);
       } catch (e) {
+        console.warn('[uyodrift mp] TURN credential fetch threw an error — falling back to STUN only:', e);
         return MP_STUN_SERVERS; // bad key, offline, service hiccup — fail open rather than block the connection
       }
     }
@@ -1567,7 +1580,7 @@
       mpConnecting = true;
       if (peer) { peer.destroy(); peer = null; }
       const code = mpRandomCode();
-      mpSetStatus('host', 'Creating room…');
+      mpSetStatus('host', mpTurnConfigured() ? 'Creating room…' : 'Creating room… (no TURN key set — same-network only, see console)');
       const iceServers = await mpGetIceServers();
       if (!mpConnecting) return; // cancelled (e.g. peer torn down) while we were fetching
       peer = new Peer(MP_ROOM_PREFIX + code, { config: { iceServers } });
@@ -1594,7 +1607,7 @@
       if (code.length !== 4) { mpSetStatus('join', 'Enter the 4-character room code.', true); return; }
       mpConnecting = true;
       if (peer) { peer.destroy(); peer = null; }
-      mpSetStatus('join', 'Connecting…');
+      mpSetStatus('join', mpTurnConfigured() ? 'Connecting…' : 'Connecting… (no TURN key set — same-network only)');
       const iceServers = await mpGetIceServers();
       if (!mpConnecting) return; // cancelled while we were fetching
       peer = new Peer(undefined, { config: { iceServers } });
