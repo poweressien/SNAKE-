@@ -229,6 +229,38 @@
   .achToastIcon { font-size: 22px; }
   .achToastLabel { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
   .achToastTitle { font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: var(--amber); font-size: 14px; }
+
+  /* ---- Car picker ---- */
+  .mpTab.locked { opacity: 0.4; }
+  .colorPickerRow { display: flex; gap: 10px; justify-content: center; margin: 4px 0 2px; }
+  .colorSwatch {
+    width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent;
+    cursor: pointer; pointer-events: auto; padding: 0;
+  }
+  .colorSwatch.active { border-color: var(--amber); box-shadow: 0 0 6px rgba(255,182,39,0.6); }
+
+  /* ---- Pause screen ---- */
+  #pauseScreen { display: none; }
+  .volumeRow { display: flex; align-items: center; gap: 12px; margin-top: 18px; width: 100%; }
+  .volumeRow .label { font-size: 12px; color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase; }
+  .volumeRow input[type="range"] {
+    flex: 1; accent-color: var(--amber); pointer-events: auto; cursor: pointer;
+  }
+
+  /* ---- Multiplayer taunts ---- */
+  #tauntRow {
+    display: none; position: fixed; left: calc(18px + env(safe-area-inset-left, 0px));
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px)); gap: 8px; z-index: 5;
+  }
+  @media (pointer: coarse) { #tauntRow { bottom: calc(190px + env(safe-area-inset-bottom, 0px)); } }
+  #tauntRow.show { display: flex; }
+  .tauntBtn {
+    pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    width: 38px; height: 38px; border-radius: 50%; font-size: 17px;
+    background: rgba(12,14,20,0.6); border: 1px solid var(--panel-line); color: var(--text);
+    display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+  }
+  .tauntBtn:active { background: rgba(255,182,39,0.3); }
 </style>
 </head>
 <body>
@@ -253,6 +285,15 @@
       <div class="label">Multiplayer</div>
       <div class="lap-value" id="mpHudText">Connecting…</div>
       <div class="best-value" id="mpOpponentLap"></div>
+      <div class="best-value" id="mpRankStatus"></div>
+    </div>
+
+    <div id="tauntRow">
+      <button class="tauntBtn" data-taunt="Catch me! 🏎️">🏎️</button>
+      <button class="tauntBtn" data-taunt="Too slow! 🐌">🐌</button>
+      <button class="tauntBtn" data-taunt="Oya, move!">👋</button>
+      <button class="tauntBtn" data-taunt="Correct driving! 👏">👏</button>
+      <button class="tauntBtn" data-taunt="GG!">🏁</button>
     </div>
 
     <div id="bottomRight" class="panel">
@@ -319,6 +360,16 @@
       <p style="font-size:12px; color:var(--text-dim); margin-top:10px;">Drift hard corners to fill your boost meter</p>
       <button id="statsBtn" class="pillBtn" style="margin-top:6px;">View Progress</button>
 
+      <div class="mpDivider">choose your car</div>
+      <div id="carPicker" class="mpTabs">
+        <button class="mpTab active" data-cartype="sedan">Sedan</button>
+        <button class="mpTab" data-cartype="sports">Sports</button>
+        <button class="mpTab" data-cartype="suv">SUV</button>
+        <button class="mpTab" data-cartype="truck">Truck</button>
+      </div>
+      <div id="carPickerStatus" class="mpStatus"></div>
+      <div id="colorPicker" class="colorPickerRow"></div>
+
       <div class="mpDivider">choose your track</div>
       <div id="trackPicker" class="mpTabs">
         <button class="mpTab active" data-track="0">Uyo Circuit</button>
@@ -360,7 +411,20 @@
       <h1><span class="word-uyo">RACE</span> <span class="word-drift">COMPLETE</span></h1>
       <div class="title-divider"></div>
       <div class="lapResult">Best lap &mdash; <b id="finalBest">0:00.00</b></div>
+      <div id="mpResultRow" class="mpStatus" style="display:none;"></div>
       <button id="restartBtn">Race Again</button>
+    </div>
+    <div id="pauseScreen" class="menuPanel">
+      <h1><span class="word-uyo">UYO</span> <span class="word-drift">PAUSED</span></h1>
+      <div class="title-divider"></div>
+      <div class="volumeRow">
+        <span class="label">Music</span>
+        <input type="range" id="volumeSlider" min="0" max="100" value="50">
+      </div>
+      <p style="font-size:12px; color:var(--text-dim); margin:6px 0 0;">Press C anytime to change camera view</p>
+      <button id="resumeBtn" style="margin-top:22px;">Resume</button>
+      <button id="pauseRestartBtn" class="pillBtn" style="margin-top:14px;">Restart Race</button>
+      <button id="quitBtn" class="pillBtn" style="margin-top:10px;">Quit to Menu</button>
     </div>
   </div>
 
@@ -835,6 +899,8 @@
       const roofMat = new BABYLON.StandardMaterial('roofMat_' + uid, scene);
       roofMat.diffuseColor = new BABYLON.Color3(color.r * 0.62, color.g * 0.62, color.b * 0.62);
       roofMat.specularColor = new BABYLON.Color3(0.4, 0.4, 0.4);
+      root._bodyMat = bodyMat;
+      root._roofMat = roofMat;
 
       const dims = typeName === 'truck'
         ? buildTruckBody(t, root, bodyMat, roofMat, sharedGlassMat, uid)
@@ -889,7 +955,56 @@
 
       return root;
     }
-    const car = createCar('#ff5a3c', 'sedan', 'player');
+
+    const CAR_COLORS = [
+      { name: 'Amber', hex: '#ff7f1f' },
+      { name: 'Crimson', hex: '#ff5a3c' },
+      { name: 'Emerald', hex: '#22a745' },
+      { name: 'Sapphire', hex: '#2f7ed8' },
+      { name: 'Graphite', hex: '#3a3d45' }
+    ];
+    const CAR_TYPE_ORDER = ['sedan', 'sports', 'suv', 'truck'];
+    const CAR_UNLOCKS = { sedan: null, sports: 'danfo_driver', suv: 'clean_sweep', truck: 'road_tripper' };
+
+    const playerCarVariants = {};
+    CAR_TYPE_ORDER.forEach((type) => {
+      const root = createCar(CAR_COLORS[0].hex, type, 'player_' + type);
+      root.setEnabled(false);
+      playerCarVariants[type] = root;
+    });
+    let selectedCarType = 'sedan';
+    let selectedCarColor = CAR_COLORS[0].hex;
+    let car = playerCarVariants.sedan;
+    car.setEnabled(true);
+
+    function applyCarColor(hex) {
+      selectedCarColor = hex;
+      CAR_TYPE_ORDER.forEach((type) => {
+        const root = playerCarVariants[type];
+        if (root._bodyMat) root._bodyMat.diffuseColor = BABYLON.Color3.FromHexString(hex);
+        if (root._roofMat) root._roofMat.diffuseColor = BABYLON.Color3.FromHexString(hex).scale(0.62);
+      });
+    }
+
+    function isCarUnlocked(type) {
+      const req = CAR_UNLOCKS[type];
+      return !req || unlockedAchievements.has(req);
+    }
+
+    // Only meant to be called from the start screen, before racing begins —
+    // swaps which pre-built car mesh is active and keeps the camera/HUD
+    // pointed at the new one.
+    function selectCarType(type) {
+      if (type === selectedCarType || !isCarUnlocked(type)) return;
+      playerCarVariants[selectedCarType].setEnabled(false);
+      selectedCarType = type;
+      car = playerCarVariants[type];
+      car.position.set(state.x, 0, state.z);
+      car.rotation.y = state.visualHeading;
+      car.rotation.z = state.roll;
+      car.setEnabled(true);
+      camera.lockedTarget = car;
+    }
 
     // ---------- TRACK SELECTION (every track is pre-built once at load and
     // just shown/hidden via its root node — simpler and safer than
@@ -998,13 +1113,23 @@
 
     // ---------- CAMERA ----------
     const camera = new BABYLON.FollowCamera('chaseCam', new BABYLON.Vector3(trackPath[0].x, 4, trackPath[0].z - 8), scene);
-    camera.radius = 9;
-    camera.heightOffset = 3.6;
+    const CAMERA_VIEWS = [
+      { radius: 9, heightOffset: 3.6 },
+      { radius: 5.5, heightOffset: 2.1 }
+    ];
+    let cameraViewIndex = 0;
+    camera.radius = CAMERA_VIEWS[0].radius;
+    camera.heightOffset = CAMERA_VIEWS[0].heightOffset;
     camera.rotationOffset = 180;
     camera.cameraAcceleration = 0.08;
     camera.maxCameraSpeed = 60;
     camera.lockedTarget = car;
     scene.activeCamera = camera;
+    function cycleCameraView() {
+      cameraViewIndex = (cameraViewIndex + 1) % CAMERA_VIEWS.length;
+      camera.radius = CAMERA_VIEWS[cameraViewIndex].radius;
+      camera.heightOffset = CAMERA_VIEWS[cameraViewIndex].heightOffset;
+    }
 
     // ---------- INPUT (keyboard + on-screen touch buttons + device tilt —
     // all feed the same `keys` map / tiltSteer value that update() reads) ----------
@@ -1017,6 +1142,8 @@
       if (!started) startRace();
       if (k === 'r') restartRace();
       if (k === 'm') toggleMute();
+      if (k === 'escape') togglePause();
+      if (k === 'c') cycleCameraView();
     });
     window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
     function isDown(...names) { return names.some(n => keys[n]); }
@@ -1144,7 +1271,7 @@
     const BPM = 114;
     const STEP_DUR = 60 / BPM / 4;   // one 16th note, seconds
     const STEPS_PER_BAR = 16;
-    const MUSIC_VOLUME = 0.5;
+    let MUSIC_VOLUME = 0.5;
     let musicBus = null, noiseBuffer = null;
     let musicStep = 0, nextStepTime = 0, barCount = 0;
     let musicMuted = false;
@@ -1607,15 +1734,22 @@
     let mpSendAccum = 0;
     let remoteCar = null;
     let remoteLastPacket = 0;
-    const remoteState = { x: 0, z: 0, heading: 0, roll: 0, lap: 1, active: false };
+    let remoteFinished = false;
+    let remoteFinalBestLap = null;
+    const remoteState = { x: 0, z: 0, heading: 0, roll: 0, lap: 1, progress: 0, active: false };
     const remoteRender = { x: 0, z: 0, heading: 0, roll: 0 };
 
     const NAME_TAG_TEX_W = 256, NAME_TAG_TEX_H = 64;
     const NAME_TAG_HEIGHT = 1.7; // world-space clearance above a sedan roof
+    const TAUNT_HEIGHT = NAME_TAG_HEIGHT + 0.9; // sits above the name tag
     const MP_NAME_STORAGE_KEY = 'uyodrift_playerName';
     let localPlayerName = 'Racer';
     let localNameTag = null;
     let remoteNameTag = null;
+    let localTauntBubble = null;
+    let remoteTauntBubble = null;
+    let localTauntTimer = null;
+    let remoteTauntTimer = null;
 
     // Wrapped in try/catch: storage can be unavailable (private browsing,
     // sandboxed preview contexts) — if so, the name field just stays blank
@@ -1685,6 +1819,45 @@
       if (!remoteNameTag) remoteNameTag = createNameTag('remote');
     }
 
+    // Deliberately separate from setNameTagText: that function skips redrawing
+    // when the text hasn't changed, which is correct for a name tag but wrong
+    // here — sending the same taunt twice in a row should still pop the
+    // bubble back up each time.
+    function setTauntText(plane, text) {
+      const safeText = (text || '').slice(0, 20);
+      const ctx = plane._nameTagTex.getContext();
+      ctx.clearRect(0, 0, NAME_TAG_TEX_W, NAME_TAG_TEX_H);
+      ctx.fillStyle = 'rgba(12,14,20,0.72)';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(4, 12, NAME_TAG_TEX_W - 8, NAME_TAG_TEX_H - 24, 10);
+        ctx.fill();
+      } else {
+        ctx.fillRect(4, 12, NAME_TAG_TEX_W - 8, NAME_TAG_TEX_H - 24);
+      }
+      ctx.font = 'bold 22px "Space Grotesk", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffb627';
+      ctx.fillText(safeText, NAME_TAG_TEX_W / 2, NAME_TAG_TEX_H / 2 + 1);
+      plane._nameTagTex.update();
+      plane.setEnabled(true);
+    }
+
+    function showTaunt(isLocalCar, text) {
+      if (isLocalCar) {
+        if (!localTauntBubble) localTauntBubble = createNameTag('taunt_local');
+        setTauntText(localTauntBubble, text);
+        clearTimeout(localTauntTimer);
+        localTauntTimer = setTimeout(() => { if (localTauntBubble) localTauntBubble.setEnabled(false); }, 2500);
+      } else {
+        if (!remoteTauntBubble) remoteTauntBubble = createNameTag('taunt_remote');
+        setTauntText(remoteTauntBubble, text);
+        clearTimeout(remoteTauntTimer);
+        remoteTauntTimer = setTimeout(() => { if (remoteTauntBubble) remoteTauntBubble.setEnabled(false); }, 2500);
+      }
+    }
+
     function mpRandomCode() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // skip 0/O/1/I to avoid ambiguity
       let s = '';
@@ -1737,12 +1910,23 @@
           if (!isHost) mpApplyRemoteTrack(data.trackIndex);
           return;
         }
+        if (data.type === 'taunt') {
+          if (typeof data.text === 'string') showTaunt(false, data.text);
+          return;
+        }
+        if (data.type === 'finished') {
+          remoteFinished = true;
+          remoteFinalBestLap = typeof data.bestLap === 'number' ? data.bestLap : null;
+          if (state.finished) renderMpResult();
+          return;
+        }
         if (typeof data.x !== 'number') return;
         remoteState.x = data.x;
         remoteState.z = data.z;
         remoteState.heading = data.heading;
         remoteState.roll = data.roll;
         remoteState.lap = data.lap;
+        remoteState.progress = typeof data.progress === 'number' ? data.progress : 0;
         remoteState.active = true;
         remoteLastPacket = performance.now();
         if (data.name && remoteNameTag) setNameTagText(remoteNameTag, data.name);
@@ -1847,7 +2031,7 @@
       mpSendAccum += dt;
       if (mpSendAccum < MP_SEND_INTERVAL) return;
       mpSendAccum = 0;
-      netConn.send({ x: state.x, z: state.z, heading: state.heading, roll: state.roll, lap: state.lap, name: localPlayerName });
+      netConn.send({ x: state.x, z: state.z, heading: state.heading, roll: state.roll, lap: state.lap, progress: state.progress, name: localPlayerName });
     }
 
     // Symmetric rendering side: smooth the last received packet toward the
@@ -1871,7 +2055,13 @@
       remoteCar.rotation.y = remoteRender.heading;
       remoteCar.rotation.z = remoteRender.roll;
       if (remoteNameTag) remoteNameTag.position.set(remoteRender.x, NAME_TAG_HEIGHT, remoteRender.z);
+      if (remoteTauntBubble) remoteTauntBubble.position.set(remoteRender.x, TAUNT_HEIGHT, remoteRender.z);
       if (el.mpOpponentLap) el.mpOpponentLap.textContent = 'Opponent — Lap ' + remoteState.lap;
+      if (el.mpRankStatus) {
+        const myTotal = state.lap * N + state.progress;
+        const theirTotal = remoteState.lap * N + remoteState.progress;
+        el.mpRankStatus.textContent = myTotal >= theirTotal ? '🟢 Ahead' : '🔴 Behind';
+      }
     }
 
     // ---------- HUD ----------
@@ -1919,7 +2109,18 @@
       statsBestTimes: document.getElementById('statsBestTimes'),
       statsAchievements: document.getElementById('statsAchievements'),
       achievementToast: document.getElementById('achievementToast'),
-      achievementToastTitle: document.getElementById('achievementToastTitle')
+      achievementToastTitle: document.getElementById('achievementToastTitle'),
+      carPicker: document.getElementById('carPicker'),
+      carPickerStatus: document.getElementById('carPickerStatus'),
+      colorPicker: document.getElementById('colorPicker'),
+      pauseScreen: document.getElementById('pauseScreen'),
+      resumeBtn: document.getElementById('resumeBtn'),
+      pauseRestartBtn: document.getElementById('pauseRestartBtn'),
+      quitBtn: document.getElementById('quitBtn'),
+      volumeSlider: document.getElementById('volumeSlider'),
+      mpRankStatus: document.getElementById('mpRankStatus'),
+      tauntRow: document.getElementById('tauntRow'),
+      mpResultRow: document.getElementById('mpResultRow')
     };
     (function restoreSavedName() {
       const saved = mpLoadSavedName();
@@ -1977,6 +2178,42 @@
       el.startScreen.style.display = 'flex';
     });
 
+    function renderCarPicker() {
+      document.querySelectorAll('#carPicker .mpTab').forEach((chip) => {
+        const type = chip.dataset.cartype;
+        const unlocked = isCarUnlocked(type);
+        chip.classList.toggle('locked', !unlocked);
+        chip.classList.toggle('active', type === selectedCarType);
+        chip.textContent = chip.textContent.replace(' 🔒', '') + (unlocked ? '' : ' 🔒');
+      });
+    }
+    renderCarPicker();
+    document.querySelectorAll('#carPicker .mpTab').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const type = chip.dataset.cartype;
+        if (!isCarUnlocked(type)) {
+          const reqId = CAR_UNLOCKS[type];
+          const reqName = (ACHIEVEMENTS.find((a) => a.id === reqId) || {}).name || 'an achievement';
+          el.carPickerStatus.textContent = 'Locked — earn "' + reqName + '" to unlock this car.';
+          return;
+        }
+        el.carPickerStatus.textContent = '';
+        selectCarType(type);
+        renderCarPicker();
+      });
+    });
+
+    el.colorPicker.innerHTML = CAR_COLORS.map((c, i) =>
+      '<button class="colorSwatch' + (i === 0 ? ' active' : '') + '" data-color="' + c.hex + '" title="' + c.name + '" style="background:' + c.hex + ';"></button>'
+    ).join('');
+    document.querySelectorAll('.colorSwatch').forEach((swatch) => {
+      swatch.addEventListener('click', () => {
+        document.querySelectorAll('.colorSwatch').forEach((s) => s.classList.remove('active'));
+        swatch.classList.add('active');
+        applyCarColor(swatch.dataset.color);
+      });
+    });
+
     const trackChips = document.querySelectorAll('#trackPicker .mpTab');
     trackChips.forEach((chip) => {
       chip.addEventListener('click', () => {
@@ -1996,6 +2233,17 @@
       return m + ':' + s.toFixed(2).padStart(5, '0');
     }
 
+    function renderMpResult() {
+      if (!isMultiplayer || !el.mpResultRow) return;
+      el.mpResultRow.style.display = 'block';
+      if (remoteFinished && typeof remoteFinalBestLap === 'number' && state.bestLap !== null) {
+        const youWin = state.bestLap < remoteFinalBestLap;
+        el.mpResultRow.textContent = (youWin ? '🏆 You win — ' : 'Opponent wins — ') + 'you ' + formatTime(state.bestLap) + ' vs them ' + formatTime(remoteFinalBestLap);
+      } else {
+        el.mpResultRow.textContent = 'Waiting for opponent to finish…';
+      }
+    }
+
     let started = false;
     function startRace() {
       started = true;
@@ -2012,6 +2260,30 @@
     el.startBtn.addEventListener('click', startRace);
     el.restartBtn.addEventListener('click', restartRace);
 
+    let paused = false;
+    function togglePause() {
+      if (!started || state.finished) return;
+      paused = !paused;
+      el.pauseScreen.style.display = paused ? 'flex' : 'none';
+      el.overlay.style.display = paused ? 'flex' : 'none';
+    }
+    el.resumeBtn.addEventListener('click', togglePause);
+    el.pauseRestartBtn.addEventListener('click', () => { paused = false; restartRace(); });
+    el.quitBtn.addEventListener('click', () => { window.location.reload(); });
+    document.querySelectorAll('.tauntBtn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!isMultiplayer) return;
+        const text = btn.dataset.taunt;
+        showTaunt(true, text);
+        if (netConn && netConn.open) netConn.send({ type: 'taunt', text });
+      });
+    });
+    el.volumeSlider.addEventListener('input', () => {
+      MUSIC_VOLUME = Number(el.volumeSlider.value) / 100;
+      if (musicMuted) { musicMuted = false; if (el.muteBtn) el.muteBtn.textContent = '\u{1F50A}'; }
+      if (musicBus && audioCtx) musicBus.gain.setTargetAtTime(MUSIC_VOLUME, audioCtx.currentTime, 0.05);
+    });
+
     function restartRace() {
       state.x = trackPath[0].x; state.z = trackPath[0].z;
       state.heading = startHeading; state.visualHeading = startHeading; state.speed = 0; state.roll = 0;
@@ -2022,6 +2294,9 @@
       state.hadWallHitThisRace = false;
       state.driftTime = 0;
       state.boost = 0;
+      remoteFinished = false;
+      remoteFinalBestLap = null;
+      if (el.mpResultRow) el.mpResultRow.style.display = 'none';
       tracksRaced.add(TRACKS[currentTrackIndex].name);
       saveTracksRaced();
       if (tracksRaced.size >= TRACKS.length) unlockAchievement('road_tripper');
@@ -2038,7 +2313,8 @@
       updateDriftSmoke(dt);
       checkTiltSignal();
       mpUpdateRemoteCar(dt);
-      if (!started || state.finished) return;
+      if (el.tauntRow) el.tauntRow.classList.toggle('show', isMultiplayer);
+      if (!started || state.finished || paused) return;
       state.raceClock += dt;
 
       const accel = isDown('w', 'arrowup');
@@ -2122,6 +2398,7 @@
       state.roll += (targetRoll - state.roll) * 0.12;
       car.rotation.z = state.roll;
       if (localNameTag) localNameTag.position.set(state.x, NAME_TAG_HEIGHT, state.z);
+      if (localTauntBubble) localTauntBubble.position.set(state.x, TAUNT_HEIGHT, state.z);
 
       // Wraparound-safe progress: accumulate the signed step in nearest-track-index
       // each frame (correcting for the array seam at index 0/N-1) instead of testing
@@ -2148,7 +2425,11 @@
           el.overlay.style.display = 'flex';
           unlockAchievement('chequered_flag');
           if (!state.hadWallHitThisRace) unlockAchievement('clean_sweep');
-          if (isMultiplayer) unlockAchievement('squad_racing');
+          if (isMultiplayer) {
+            unlockAchievement('squad_racing');
+            if (netConn && netConn.open) netConn.send({ type: 'finished', bestLap: state.bestLap });
+          }
+          renderMpResult();
         } else {
           state.lap += 1;
         }
