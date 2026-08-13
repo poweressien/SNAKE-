@@ -314,6 +314,7 @@
           <div class="best-value" id="bestTime">—</div>
         </div>
       </div>
+      <div class="best-value" id="racePosition" style="margin-top:6px;"></div>
     </div>
 
     <div id="mpHud" class="panel">
@@ -394,6 +395,7 @@
       </div>
       <p style="font-size:12px; color:var(--text-dim); margin-top:10px;">Drift hard corners to fill your boost meter</p>
       <button id="statsBtn" class="pillBtn" style="margin-top:6px;">View Progress</button>
+      <button id="ghostToggleBtn" class="pillBtn" style="margin-top:8px;">Ghost: On</button>
 
       <div class="mpDivider">choose your car</div>
       <div id="carPicker" class="mpTabs">
@@ -411,6 +413,7 @@
         <button class="mpTab" data-track="1">Ibom Hairpins</button>
         <button class="mpTab" data-track="2">Delta Sweep</button>
         <button class="mpTab" data-track="3">Airport Road</button>
+        <button class="mpTab" data-track="4">Marina Run</button>
       </div>
 
       <button id="startBtn">Start Engine</button>
@@ -531,10 +534,16 @@
     // too, so the straight can be built as a genuinely wide, sparse highway
     // instead of reusing the circuits' 2-lane, tree-lined look. ----------
     const TRACKS = [
-      { name: 'Uyo Circuit', pathFn: (samples) => buildTrackPath(samples, (a) => 150 + Math.sin(a * 3) * 38 + Math.cos(a * 2) * 22 + Math.sin(a * 5 + 1) * 10), roadHalfWidth: 6, treeCount: 140 },
-      { name: 'Ibom Hairpins', pathFn: (samples) => buildTrackPath(samples, (a) => 120 + Math.sin(a * 5) * 28 + Math.cos(a * 7) * 16 + Math.sin(a * 2 + 0.5) * 12), roadHalfWidth: 6, treeCount: 140 },
-      { name: 'Delta Sweep', pathFn: (samples) => buildTrackPath(samples, (a) => 185 + Math.sin(a * 2) * 45 + Math.cos(a * 3 + 0.8) * 20), roadHalfWidth: 6, treeCount: 140 },
-      { name: 'Airport Road', pathFn: (samples) => buildStadiumPath(samples, 230, 46), roadHalfWidth: 10, treeCount: 46 }
+      { name: 'Uyo Circuit', pathFn: (samples) => buildTrackPath(samples, (a) => 150 + Math.sin(a * 3) * 38 + Math.cos(a * 2) * 22 + Math.sin(a * 5 + 1) * 10), roadHalfWidth: 6, treeCount: 140,
+        env: { sky: [0.53, 0.72, 0.86], fogStart: 110, fogEnd: 320, hemi: 0.78, sun: 0.9 } },
+      { name: 'Ibom Hairpins', pathFn: (samples) => buildTrackPath(samples, (a) => 120 + Math.sin(a * 5) * 28 + Math.cos(a * 7) * 16 + Math.sin(a * 2 + 0.5) * 12), roadHalfWidth: 6, treeCount: 140,
+        env: { sky: [0.58, 0.60, 0.64], fogStart: 70, fogEnd: 220, hemi: 0.68, sun: 0.6 } },
+      { name: 'Delta Sweep', pathFn: (samples) => buildTrackPath(samples, (a) => 185 + Math.sin(a * 2) * 45 + Math.cos(a * 3 + 0.8) * 20), roadHalfWidth: 6, treeCount: 140,
+        env: { sky: [0.86, 0.62, 0.42], fogStart: 140, fogEnd: 380, hemi: 0.72, sun: 1.05 } },
+      { name: 'Airport Road', pathFn: (samples) => buildStadiumPath(samples, 230, 46), roadHalfWidth: 10, treeCount: 46,
+        env: { sky: [0.58, 0.76, 0.90], fogStart: 160, fogEnd: 420, hemi: 0.85, sun: 0.95 } },
+      { name: 'Marina Run', pathFn: (samples) => buildTrackPath(samples, (a) => 155 + Math.sin(a * 4) * 32 + Math.sin(a * 7 + 2) * 14), roadHalfWidth: 6, treeCount: 140,
+        env: { sky: [0.30, 0.34, 0.48], fogStart: 90, fogEnd: 260, hemi: 0.5, sun: 0.55 } }
     ];
 
     // ---------- TRACK PATH (procedural closed loop, no external assets) ----------
@@ -1057,33 +1066,50 @@
       roadHalfWidth = td.roadHalfWidth;
       wallLimit = td.wallLimit;
       treeCount = td.treeCount;
+      const env = TRACKS[index].env;
+      if (env) {
+        scene.clearColor = new BABYLON.Color4(env.sky[0], env.sky[1], env.sky[2], 1);
+        scene.fogColor = new BABYLON.Color3(env.sky[0], env.sky[1], env.sky[2]);
+        scene.fogStart = env.fogStart;
+        scene.fogEnd = env.fogEnd;
+        hemi.intensity = env.hemi;
+        sun.intensity = env.sun;
+      }
     }
     switchToTrack(0);
 
     // ---------- TRAFFIC (AI cars looping the circuit — visual variety + a
     // gentle push if the player gets too close, no full rigid-body collision) ----------
     const TRAFFIC_CONFIG = [
-      { color: '#3a86ff', type: 'suv',    startFrac: 0.08, speed: 14, lane: -2.4 },
-      { color: '#8338ec', type: 'sports', startFrac: 0.22, speed: 20, lane: 2.0 },
-      { color: '#fb5607', type: 'truck',  startFrac: 0.38, speed: 11, lane: -1.8 },
-      { color: '#06d6a0', type: 'sedan',  startFrac: 0.55, speed: 16, lane: 2.6 },
-      { color: '#ffbe0b', type: 'suv',    startFrac: 0.70, speed: 13, lane: -2.8 },
-      { color: '#ef476f', type: 'sports', startFrac: 0.85, speed: 18, lane: 1.5 }
+      { color: '#3a86ff', type: 'suv',    startFrac: 0.08, speed: 25, lane: -2.4 },
+      { color: '#8338ec', type: 'sports', startFrac: 0.22, speed: 33, lane: 2.0 },
+      { color: '#fb5607', type: 'truck',  startFrac: 0.38, speed: 22, lane: -1.8 },
+      { color: '#06d6a0', type: 'sedan',  startFrac: 0.55, speed: 28, lane: 2.6 },
+      { color: '#ffbe0b', type: 'suv',    startFrac: 0.70, speed: 24, lane: -2.8 },
+      { color: '#ef476f', type: 'sports', startFrac: 0.85, speed: 31, lane: 1.5 }
     ];
     const traffic = TRAFFIC_CONFIG.map((cfg, i) => ({
       root: createCar(cfg.color, cfg.type, 'ai' + i),
       floatIdx: cfg.startFrac * N,
+      totalProgress: cfg.startFrac * N, // cumulative, never wraps — used for race position
+      startFrac: cfg.startFrac,
       speed: cfg.speed,
       lane: cfg.lane
     }));
+    function resetTrafficPositions() {
+      traffic.forEach((tc) => {
+        tc.totalProgress = tc.startFrac * N;
+        tc.floatIdx = tc.totalProgress % N;
+      });
+    }
 
     function updateTraffic(dt) {
       if (isMultiplayer) return; // AI traffic has no place once a real opponent is on track
       traffic.forEach((tc) => {
         tc.staggerTimer = Math.max(0, (tc.staggerTimer || 0) - dt);
         const staggerFactor = tc.staggerTimer > 0 ? 0.3 : 1; // reeling briefly after being hit
-        tc.floatIdx += (tc.speed * staggerFactor * dt) / avgSegLen;
-        if (tc.floatIdx >= N) tc.floatIdx -= N;
+        tc.totalProgress += (tc.speed * staggerFactor * dt) / avgSegLen;
+        tc.floatIdx = tc.totalProgress % N;
         const i0 = Math.floor(tc.floatIdx) % N;
         const i1 = (i0 + 1) % N;
         const frac = tc.floatIdx - Math.floor(tc.floatIdx);
@@ -1280,15 +1306,24 @@
 
     // ---------- AUDIO (procedural engine hum, no audio files) ----------
     let audioCtx = null, osc = null, gainNode = null, filterNode = null;
+    const ENGINE_PROFILES = {
+      sedan:  { baseFreq: 55, freqScale: 3.2, filterFreq: 700, waveform: 'sawtooth' },
+      sports: { baseFreq: 72, freqScale: 4.4, filterFreq: 1050, waveform: 'sawtooth' },
+      suv:    { baseFreq: 46, freqScale: 2.6, filterFreq: 480, waveform: 'sawtooth' },
+      truck:  { baseFreq: 36, freqScale: 2.1, filterFreq: 340, waveform: 'square' }
+    };
+    let engineProfile = ENGINE_PROFILES.sedan;
+
     function initAudio() {
       if (audioCtx) return;
+      engineProfile = ENGINE_PROFILES[selectedCarType] || ENGINE_PROFILES.sedan;
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       osc = audioCtx.createOscillator();
-      osc.type = 'sawtooth';
+      osc.type = engineProfile.waveform;
       filterNode = audioCtx.createBiquadFilter();
       filterNode.type = 'lowpass';
-      filterNode.frequency.value = 700;
+      filterNode.frequency.value = engineProfile.filterFreq;
       gainNode = audioCtx.createGain();
       gainNode.gain.value = 0.05;
       osc.connect(filterNode).connect(gainNode).connect(audioCtx.destination);
@@ -1297,7 +1332,7 @@
     }
     function updateAudio() {
       if (!osc) return;
-      const targetFreq = 55 + Math.min(Math.abs(state.speed), MAX_SPEED) * 3.2;
+      const targetFreq = engineProfile.baseFreq + Math.min(Math.abs(state.speed), MAX_SPEED) * engineProfile.freqScale;
       osc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.06);
     }
 
@@ -1477,6 +1512,28 @@
       }
     }
 
+    const skidMat = new BABYLON.StandardMaterial('skidMat', scene);
+    skidMat.diffuseColor = new BABYLON.Color3(0.04, 0.04, 0.04);
+    skidMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    skidMat.alpha = 0.4;
+    let activeSkidMarks = [];
+    let skidMarkAccum = 0;
+
+    function spawnSkidMark(x, z, heading) {
+      const mark = BABYLON.MeshBuilder.CreateGround('skid', { width: 0.26, height: 0.9 }, scene);
+      mark.material = skidMat;
+      mark.position.set(x, 0.03, z);
+      mark.rotation.y = heading;
+      activeSkidMarks.push({ mesh: mark, life: 0, maxLife: 6 });
+    }
+    function updateSkidMarks(dt) {
+      for (let i = activeSkidMarks.length - 1; i >= 0; i--) {
+        const s = activeSkidMarks[i];
+        s.life += dt;
+        if (s.life >= s.maxLife) { s.mesh.dispose(); activeSkidMarks.splice(i, 1); }
+      }
+    }
+
     // Boost application — must run BEFORE the speed cap in the main update
     // loop, since it changes what that cap should be for this frame. Returns
     // the effective max speed to clamp against.
@@ -1509,6 +1566,16 @@
           spawnDriftSmoke(state.x - Math.sin(state.heading) * 2.0, state.z - Math.cos(state.heading) * 2.0);
         }
         if (state.driftTime >= DRIFT_UNLOCK_SECONDS) unlockAchievement('danfo_driver');
+        skidMarkAccum += dt;
+        if (skidMarkAccum > 0.08) {
+          skidMarkAccum = 0;
+          const rearX = state.x - Math.sin(state.heading) * 2.0;
+          const rearZ = state.z - Math.cos(state.heading) * 2.0;
+          const rightX = Math.cos(state.heading) * 0.75;
+          const rightZ = -Math.sin(state.heading) * 0.75;
+          spawnSkidMark(rearX + rightX, rearZ + rightZ, state.heading);
+          spawnSkidMark(rearX - rightX, rearZ - rightZ, state.heading);
+        }
       } else {
         state.driftTime = 0;
       }
@@ -1517,6 +1584,89 @@
         el.boostBarFill.classList.toggle('ready', state.boost >= BOOST_MAX);
         el.boostBarFill.classList.toggle('active', state.boosting);
       }
+    }
+
+    // ---------- GHOST REPLAY (races your own saved best lap — solo only,
+    // stored locally per track, same localStorage pattern as best times) ----------
+    const GHOST_SAMPLE_INTERVAL = 0.1; // 10Hz recording
+    let ghostRecording = [];
+    let ghostRecordAccum = 0;
+    let currentGhostData = null; // the recording being raced against this attempt
+    let ghostPlayIndex = 0;
+    let ghostCar = null;
+    let ghostEnabled = true;
+
+    function loadGhost(trackName) {
+      try {
+        const ghosts = JSON.parse(localStorage.getItem('uyodrift_ghosts') || '{}');
+        return Array.isArray(ghosts[trackName]) && ghosts[trackName].length > 1 ? ghosts[trackName] : null;
+      } catch (e) { return null; }
+    }
+    function saveGhost(trackName, recording) {
+      if (!recording || recording.length < 2) return;
+      try {
+        const ghosts = JSON.parse(localStorage.getItem('uyodrift_ghosts') || '{}');
+        ghosts[trackName] = recording;
+        localStorage.setItem('uyodrift_ghosts', JSON.stringify(ghosts));
+      } catch (e) {}
+    }
+    function resetGhostLap() {
+      ghostRecording = [];
+      ghostRecordAccum = 0;
+      ghostPlayIndex = 0;
+    }
+    function recordGhostSample(dt) {
+      ghostRecordAccum += dt;
+      if (ghostRecordAccum < GHOST_SAMPLE_INTERVAL) return;
+      ghostRecordAccum = 0;
+      ghostRecording.push({ t: state.raceClock - state.lapStart, x: state.x, z: state.z, heading: state.visualHeading });
+    }
+
+    // Ghost car reuses the normal car factory for visual consistency, then
+    // gets made translucent. Materials created per-uid inside createCar are
+    // exclusive to this car and safe to alpha directly; the one shared
+    // material (glass) has to be swapped for a dedicated clone first, or
+    // every other car's windshield would go translucent too.
+    function ensureGhostCar() {
+      if (ghostCar) return;
+      ghostCar = createCar('#bfe8ff', 'sedan', 'ghost');
+      ghostCar.setEnabled(false);
+      const ghostGlassMat = sharedGlassMat.clone('ghostGlassMat');
+      ghostGlassMat.alpha = 0.22;
+      ghostCar.getChildMeshes().forEach((mesh) => {
+        if (!mesh.material) return;
+        if (mesh.material === sharedGlassMat) {
+          mesh.material = ghostGlassMat;
+        } else {
+          mesh.material.alpha = 0.3;
+        }
+      });
+    }
+
+    function updateGhost(dt) {
+      if (!ghostCar) return;
+      if (!ghostEnabled || isMultiplayer || !currentGhostData || currentGhostData.length < 2 || !started || state.finished || paused) {
+        ghostCar.setEnabled(false);
+        return;
+      }
+      const t = state.raceClock - state.lapStart;
+      const last = currentGhostData[currentGhostData.length - 1];
+      if (t > last.t) { ghostCar.setEnabled(false); return; }
+      while (ghostPlayIndex < currentGhostData.length - 2 && currentGhostData[ghostPlayIndex + 1].t < t) {
+        ghostPlayIndex++;
+      }
+      const a = currentGhostData[ghostPlayIndex];
+      const b = currentGhostData[Math.min(ghostPlayIndex + 1, currentGhostData.length - 1)];
+      const span = Math.max(0.0001, b.t - a.t);
+      const frac = Math.max(0, Math.min(1, (t - a.t) / span));
+      const gx = a.x + (b.x - a.x) * frac;
+      const gz = a.z + (b.z - a.z) * frac;
+      let headingDiff = b.heading - a.heading;
+      while (headingDiff > Math.PI) headingDiff -= Math.PI * 2;
+      while (headingDiff < -Math.PI) headingDiff += Math.PI * 2;
+      ghostCar.setEnabled(true);
+      ghostCar.position.set(gx, 0, gz);
+      ghostCar.rotation.y = a.heading + headingDiff * frac;
     }
 
     // ---------- IMPACT EFFECTS (sparks + screen flash + thud, shared by wall
@@ -2155,7 +2305,9 @@
       volumeSlider: document.getElementById('volumeSlider'),
       mpRankStatus: document.getElementById('mpRankStatus'),
       tauntRow: document.getElementById('tauntRow'),
-      mpResultRow: document.getElementById('mpResultRow')
+      mpResultRow: document.getElementById('mpResultRow'),
+      racePosition: document.getElementById('racePosition'),
+      ghostToggleBtn: document.getElementById('ghostToggleBtn')
     };
     (function restoreSavedName() {
       const saved = mpLoadSavedName();
@@ -2212,6 +2364,10 @@
       el.statsScreen.style.display = 'none';
       el.startScreen.style.display = 'flex';
     });
+    el.ghostToggleBtn.addEventListener('click', () => {
+      ghostEnabled = !ghostEnabled;
+      el.ghostToggleBtn.textContent = 'Ghost: ' + (ghostEnabled ? 'On' : 'Off');
+    });
 
     function renderCarPicker() {
       document.querySelectorAll('#carPicker .mpTab').forEach((chip) => {
@@ -2259,6 +2415,8 @@
         switchToTrack(idx);
         resetCarToTrackStart();
         state.bestLap = loadBestTime(TRACKS[idx].name);
+        currentGhostData = loadGhost(TRACKS[idx].name);
+        resetGhostLap();
       });
     });
 
@@ -2279,6 +2437,15 @@
       }
     }
 
+    function updateRacePosition() {
+      if (isMultiplayer || !el.racePosition) return;
+      const myTotal = (state.lap - 1) * N + state.progress;
+      let position = 1;
+      traffic.forEach((tc) => { if (tc.totalProgress > myTotal) position++; });
+      const suffix = position === 1 ? 'st' : position === 2 ? 'nd' : position === 3 ? 'rd' : 'th';
+      el.racePosition.textContent = position + suffix + ' of ' + (traffic.length + 1);
+    }
+
     let started = false;
     function startRace() {
       started = true;
@@ -2288,6 +2455,10 @@
       state.hadWallHitThisRace = false;
       state.driftTime = 0;
       state.boost = 0;
+      resetTrafficPositions();
+      ensureGhostCar();
+      currentGhostData = loadGhost(TRACKS[currentTrackIndex].name);
+      resetGhostLap();
       tracksRaced.add(TRACKS[currentTrackIndex].name);
       saveTracksRaced();
       if (tracksRaced.size >= TRACKS.length) unlockAchievement('road_tripper');
@@ -2329,6 +2500,9 @@
       state.hadWallHitThisRace = false;
       state.driftTime = 0;
       state.boost = 0;
+      resetTrafficPositions();
+      currentGhostData = loadGhost(TRACKS[currentTrackIndex].name);
+      resetGhostLap();
       remoteFinished = false;
       remoteFinalBestLap = null;
       if (el.mpResultRow) el.mpResultRow.style.display = 'none';
@@ -2346,8 +2520,10 @@
       updateMusicScheduler();
       updateSparks(dt);
       updateDriftSmoke(dt);
+      updateSkidMarks(dt);
       checkTiltSignal();
       mpUpdateRemoteCar(dt);
+      updateGhost(dt);
       if (el.tauntRow) el.tauntRow.classList.toggle('show', isMultiplayer);
       if (!started || state.finished || paused) return;
       state.raceClock += dt;
@@ -2375,6 +2551,7 @@
       if (right) steerInput += 1;
       steerInput = Math.max(-1, Math.min(1, steerInput));
       updateDriftState(dt, steerInput);
+      recordGhostSample(dt);
 
       state.heading += TURN_RATE * speedFactor * steerInput * dt;
       if (steerInput !== 0) {
@@ -2447,11 +2624,14 @@
       if (state.progress >= N) {
         state.progress -= N;
         const lapTime = state.raceClock - state.lapStart;
+        ghostRecording.push({ t: lapTime, x: state.x, z: state.z, heading: state.visualHeading });
         if (state.bestLap === null || lapTime < state.bestLap) {
           state.bestLap = lapTime;
           saveBestTime(TRACKS[currentTrackIndex].name, lapTime);
+          saveGhost(TRACKS[currentTrackIndex].name, ghostRecording);
         }
         state.lapStart = state.raceClock;
+        resetGhostLap();
         if (state.lap >= TOTAL_LAPS) {
           state.finished = true;
           el.finalBest.textContent = formatTime(state.bestLap);
@@ -2475,6 +2655,7 @@
       el.lapTime.textContent = formatTime(state.raceClock - state.lapStart);
       el.bestTime.textContent = state.bestLap === null ? '—' : formatTime(state.bestLap);
       el.speedValue.textContent = Math.round(Math.abs(state.speed) * 3.6);
+      updateRacePosition();
 
       updateAudio();
       mpSend(dt);
